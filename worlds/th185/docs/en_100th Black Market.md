@@ -88,5 +88,5 @@ When you receive an item, the client will inform you of what you received. Chang
 ## Special Thanks
 - **Nepley**: Their AP implementations for Embodiment of Scarlet Devil, Perfect Cherry Blossom, and Imperishable Night were borrowed as a framework for 100th Black Market AP. Anticheat disabling as well.
 - **CodeGorilla**: Nicer-looking names in Options.
-- **Doremy/Iesua Inane**, Mirage Creators: Playtesting, writing several Death Link messages.
+- **Doremy/Iesua Inane**: Playtesting, writing several Death Link messages.
 - **lvcoloredmagic/Marisa**: Playtesting, figuring out a workaround to run this on Linux for the time being.
