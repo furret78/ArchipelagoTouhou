@@ -72,12 +72,30 @@ class GameController:
 		except:
 			return False
 
-	def is_game_replay(self):
+	def is_game_replay(self) -> bool:
 		"""
-		If True, the player is viewing a replay.
+		If True, the player is viewing a replay AND in a stage.
 		"""
 		addrIsReplay = self.get_address_custom_base(ADDR_BASE_GAME_THREAD, OFFSET_GAME_IS_REPLAY)
 		return self.pm.read_short(addrIsReplay) != 0
+
+	def is_game_scene_select(self) -> bool:
+		"""
+		If True, the player is currently in the scene select menu.
+		May not be reliable if it's first boot-up
+		"""
+		addrIsSceneSelect = self.get_address_custom_base(ADDR_BASE_MAIN_MENU, OFFSET_CURRENT_MENU_CHOSEN)
+		hex_byte_read = self.pm.read_bytes(addrIsSceneSelect, 1).hex()
+		return hex_byte_read[0] == 0 or hex_byte_read[0] == 4
+
+	def is_game_replay_select(self) -> bool:
+		"""
+		If True, the player is currently in the replay select menu.
+		Last scene chosen value will not be cleared.
+		"""
+		addrIsReplaySelect = self.get_address_custom_base(ADDR_BASE_MAIN_MENU, OFFSET_CURRENT_MENU_CHOSEN)
+		hex_byte_read = self.pm.read_bytes(addrIsReplaySelect, 1).hex()
+		return hex_byte_read[1] == 8
 
 	#
 	# Initialization
@@ -242,6 +260,9 @@ class GameController:
 		return self.pm.read_int(self.pm.base_address + ADDR_LAST_DAY_CHOSEN)
 
 	def get_last_scene_chosen(self) -> int:
+		"""
+		If this returns 0 or any values greater than 10, it is an invalid scene number.
+		"""
 		return self.pm.read_int(self.pm.base_address + ADDR_LAST_SCENE_CHOSEN)
 
 	def get_notice_queue_count(self) -> int:

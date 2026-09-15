@@ -1,5 +1,4 @@
 import asyncio
-from unittest import case
 
 import Utils
 import colorama
@@ -19,17 +18,18 @@ from CommonClient import (
 from NetUtils import NetworkItem
 from Utils import user_path
 from .client_handler import GameHandler
-from .. import clamp
 from ..utils.utils_get_name import get_item_index_save_name, get_location_name_nickname, get_location_name_music_room, \
 	get_location_name_scene, get_location_name_scene_with_item
 from ..utils.utils_math import client_directory_get_or_default, set_scene_clear_neutral, get_scene_clear_neutral, \
-	should_be_save_b
+	should_be_save_b, clamp
 from ..variables.game_info import DISPLAY_NAME, SHORT_NAME, CLIENT_DATA_PATH, JSON_SLOT_ITEMS, JSON_SLOT_NAME, \
 	JSON_SLOT_CLEARS_A, JSON_SLOT_CLEARS_B, JSON_SLOT_PLAYTIME, JSON_SLOT_DEATHS, JSON_SLOT_SCENE_SKIP
 from ..client.client_cmd import CommandProccessorISC
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_MAX_PLAYTIME_CLIENT, CONST_MAX_DEATHS_CLIENT, \
 	CONST_MAX_SCENE_SKIPS
-from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID
+from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID, CONST_PROGRESSIVE_DAY, \
+	CONST_SUBITEM_SLOT_NAME
+from ..worldgen.items import item_table
 from ..worldgen.world_locations.location_table import location_table
 
 CONST_TOTAL_NICKNAME_COUNT = len(CONST_NICKNAME_NAME)
@@ -54,6 +54,7 @@ class ContextISC(CommonContext):
 		self.game = DISPLAY_NAME
 		self.items_handling = 0b111  # Item from starting inventory, own world and other world
 		self.command_processor = CommandProccessorISC
+		self.last_received_item_index_server: int = -1
 
 		self.retrieved_custom_data: bool = False
 		self.loaded_past_received_items: bool = False
@@ -102,6 +103,7 @@ class ContextISC(CommonContext):
 		self.is_connected = False
 		self.all_received_items = []
 		self.loaded_past_received_items = False
+		self.last_received_item_index_server = -1
 
 		self.save_data_a = 0x0
 		self.save_data_b = 0x0
@@ -151,7 +153,10 @@ class ContextISC(CommonContext):
 
 		if cmd == "ReceivedItems":
 			pass
-			#asyncio.create_task(self.handle_received_items(args["index"], args["items"]))
+			asyncio.create_task(
+				self.handle_received_items(network_index=args["index"],
+										   network_items_list=args["items"])
+			)
 
 		# Custom data goes here.
 		elif cmd == "Retrieved":
@@ -245,6 +250,15 @@ class ContextISC(CommonContext):
 			except Exception as e:
 				await asyncio.sleep(2)
 
+	def logger_debug(self, debug_msg: str):
+		logger.info(debug_msg)
+
+	#
+	# Function that checks if the main bulk of the client should be running or not.
+	#
+	def should_not_be_running_context(self) -> bool:
+		return self.handler is None or self.handler.gameController is None or not self.handler.is_game_running()
+
 	# TODO
 	# Custom Data from Server
 	#
@@ -257,11 +271,85 @@ class ContextISC(CommonContext):
 	# Handle incoming items
 	#
 	async def handle_received_items(self, network_index, network_items_list):
-		pass
+		"""
+		        Handle items received from the server. Since some save data is also
+		        embedded into the items list, the index will be ignored for them specifically.
+		        The rest of the items are separated into queues and processed simultaneously.
+		        """
+		# Wait until the game is online and the client is not having issues before processing the items.
+		while self.should_not_be_running_context() or self.in_error:
+			await asyncio.sleep(0.5)
+
+		network_item_in_id: list[int] = []
+		for network_item in network_items_list:
+			network_item_in_id.append(network_item.item)
+
+		# Python slicing will exclude the index of the start point if it's a positive integer.
+		# Before actually processing it, wait until the client has loaded the local list of received items.
+		while not self.loaded_past_received_items or self.last_received_item_index_server <= -1:
+			await asyncio.sleep(0.5)
+
+		local_list_length = len(self.all_received_items)
+
+		newly_received_items: list[NetworkItem] = []
+
+		# Upon receiving this package, check if the index is 0.
+		# If it is, bring up the loaded local item list. Grab the length of that local list.
+		# Slice the server's list from that number onwards. Only process that.
+		if network_index <= 0:
+			# If the server's list is somehow shorter than the local one,
+			# this is probably divergent history.
+			if len(network_items_list) < local_list_length:
+				self.logger_debug("Received item list is somehow smaller than the local list. Divergent history?")
+				self.all_received_items = []
+				for network_item in network_items_list:
+					self.all_received_items.append(network_item.item)
+				await self.write_last_item_list()
+				return
+			# Otherwise, business as usual.
+			newly_received_items = network_items_list[local_list_length:]
+		# If the index is not 0, check for the most common case first.
+		else:
+			# If the index is the same as the local list's length, process that as per usual.
+			if network_index == local_list_length: newly_received_items = network_items_list
+			# If the index is different, request a Sync.
+			else:
+				self.logger_debug(f"Received index {str(network_index)} does not match what the client expected {str(local_list_length)}.")
+				sync_msg = [{'cmd': 'Sync'}]
+				if self.locations_checked:
+					sync_msg.append({"cmd": "LocationChecks",
+									 "locations": list(self.locations_checked)})
+				await self.send_msgs(sync_msg)
+
+		# Save data items do not care about index.
+		self.handle_save_data_items(network_items_list)
+		# Safeguard if there are no newly received items.
+		if len(newly_received_items) <= 0: return
+		self.handle_filler_items(newly_received_items)
+		await self.add_to_item_list(newly_received_items)
 
 	# Save data items
-	def handle_save_Data_items(self, network_item_list: list[NetworkItem]):
-		pass
+	def handle_save_data_items(self, network_item_list: list[NetworkItem]):
+		day_unlock_count: int = 0
+		scene_unlock_list = []
+		item_level_list = []
+		item_count_list = []
+		item_stat_list = []
+		subitem_unlock_list = []
+
+		for network_item in network_item_list:
+			# Individually check each received item's code.
+			if network_item.item == item_table[CONST_PROGRESSIVE_DAY]:
+				day_unlock_count += 1
+			elif network_item.item == item_table[CONST_SUBITEM_SLOT_NAME]:
+				pass
+			elif network_item.item <= 10:
+				scene_unlock_list.append(network_item.item)
+			elif 12 <= network_item.item <= 20: pass
+			elif 21 <= network_item.item <= 29: pass
+			elif 32 <= network_item.item <= 40: pass
+			elif 51 <= network_item.item <= 59: pass
+			elif 41 <= network_item.item <= 48: pass
 
 	# TODO: Call update_days in the Handler after this. Write that too.
 	def handle_days_unlocked(self, day_unlock_list):
@@ -283,6 +371,9 @@ class ContextISC(CommonContext):
 		pass
 
 	async def handle_game_only_items(self):
+		pass
+
+	async def handle_menu_only_items(self):
 		pass
 
 	#
@@ -502,9 +593,7 @@ class ContextISC(CommonContext):
 		return
 
 	async def load_save_data(self):
-		while (self.handler is None or
-			   self.handler.gameController is None or
-			   not self.handler.is_game_running()):
+		while self.should_not_be_running_context():
 			await asyncio.sleep(0.5)
 
 		while self.handler.get_music_check(0):
@@ -517,6 +606,7 @@ class ContextISC(CommonContext):
 		self.load_save_data_scene_generic()
 		self.load_save_data_scene_items()
 		self.load_save_data_other()
+		self.handler.options = self.options
 
 		return
 

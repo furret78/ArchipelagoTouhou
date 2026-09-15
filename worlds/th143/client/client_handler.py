@@ -24,6 +24,9 @@ class GameHandler:
 		self.is_executing_notice: bool = False
 		self.treasure_count: int = 0
 		self.treasure_minimum: int = 1
+		self.options = None
+		self.subitem_slot_unlocked: bool = False
+		self.subitems_unlocked: list[bool] = []
 
 		self.reset()
 		self.init_game()
@@ -104,6 +107,10 @@ class GameHandler:
 		self.is_executing_notice = False
 		self.treasure_count = 0
 		self.treasure_minimum = 1
+		self.subitem_slot_unlocked = False
+		self.subitems_unlocked = [
+			False, False, False, False, False, False, False, False
+		]
 
 	def init_game(self):
 		if self.gameController is None: return

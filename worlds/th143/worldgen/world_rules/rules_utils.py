@@ -22,7 +22,6 @@ CONST_VANILLA_LOCKED_DAYS = (3, 5, 6, 8)
 # VARIOUS OPTION FILTERS
 #
 # Difficulty
-option_EasyMode = OptionFilter(SkillDifficulty, SkillDifficulty.option_easy)
 option_NormalMode = OptionFilter(SkillDifficulty, SkillDifficulty.option_normal)
 option_HardMode = OptionFilter(SkillDifficulty, SkillDifficulty.option_hard)
 option_LunaticMode = OptionFilter(SkillDifficulty, SkillDifficulty.option_lunatic)

@@ -8,6 +8,15 @@ ADDR_LAST_DAY_CHOSEN_MENU = 0xE4718
 ADDR_SUB_ITEM_UNLOCK = 0xe4728
 ADDR_CURRENT_SUB_ITEM = 0xE4714
 
+# Main Menu Pointer
+# To check for Scene Skip use, check for the following:
+# - Last Scene Chosen is not 0 or FF.
+# - Current Menu Chosen's first byte's left digit is 0 or 4.
+# And just to be safe, upon coming back from a stage that finished viewing a replay,
+# immediately set Last Scene Chosen to FF.
+ADDR_BASE_MAIN_MENU = 0xe6bb4
+OFFSET_CURRENT_MENU_CHOSEN = 0xe000
+
 # Game tick.
 ADDR_BASE_GAME_TICK = 0xe6a00
 OFFSET_GAME_TICK = 0x4240

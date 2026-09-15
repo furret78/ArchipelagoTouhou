@@ -4,7 +4,9 @@ import unittest
 import pymem
 
 from BaseClasses import MultiWorld
-from worlds.th143.utils.utils_math import get_absolute_scene_id, get_relative_scene_id
+from ..utils.utils_math import get_absolute_scene_id, get_relative_scene_id, get_pointer_address
+from ..variables.game_info import FILE_NAME
+
 
 def getPointerAddress(pm, base, offsets):
     address = base
@@ -32,34 +34,9 @@ class ISCStatTest(unittest.TestCase):
         day_id, scene_id = get_relative_scene_id(41)
         print(f"Day ID: {day_id}, Scene ID: {scene_id}")
 
-    async def test_game_loop(self):
-        def read_stage_timer() -> int:
-            addrStageTimer = getPointerAddress(self.pm, self.pm.base_address + 0xe6a00, [0x4240])
-            try:
-                return self.pm.read_int(addrStageTimer)
-            except Exception as e:
-                return -1
-
-        def read_stage_pointer() -> bool:
-            stage_pointer = self.pm.read_int(self.pm.base_address + 0xe6a00)
-            return stage_pointer > 0
-
-        self.pm = pymem.Pymem(process_name="th143.exe")
-        self.new_stage_restarted: bool = False
-        self.first_time_enter_stage: bool = True
-        while True:
-            if read_stage_pointer():
-                stage_timer = read_stage_timer()
-                if -1 < stage_timer < 50:
-                    if not self.first_time_enter_stage:
-                        print("Stage has been reset.")
-                        self.new_stage_restarted = True
-                else:
-                    self.new_stage_restarted = False
-                    if self.first_time_enter_stage:
-                        self.first_time_enter_stage = False
-            elif not self.first_time_enter_stage:
-                print("Player has left stage.")
-                self.first_time_enter_stage = True
-
-            await asyncio.sleep(0.5)
+    def test_read_left_digit_hex(self):
+        self.pm = pymem.Pymem(process_name=FILE_NAME)
+        addrMenu = get_pointer_address(self.pm, self.pm.base_address + 0xe6bb4, [0xe000])
+        hex_byte_read = self.pm.read_bytes(addrMenu, 1).hex()
+        print(hex_byte_read[0])
+        # This gets the left digit of a hex byte. Change to [1] to read the right side.

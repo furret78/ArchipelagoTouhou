@@ -12,7 +12,6 @@ class SkillDifficulty(Choice):
 	"""
 	display_name = "Skill Difficulty"
 
-	option_easy = 0
 	option_normal = 1
 	option_hard = 2
 	option_lunatic = 3
@@ -33,7 +32,7 @@ class SkillDifficulty(Choice):
 
 class TrapChance(Range):
 	"""
-    Percentage chance that any given filler Item will be replaced by a trap item.
+	Percentage chance that any given filler Item will be replaced by a trap item.
 	"""
 	display_name = "Trap Chance"
 
@@ -44,7 +43,7 @@ class TrapChance(Range):
 class TrapBlacklist(ItemSet):
 	"""
 	Which Trap items will not be generated if Trap Chance is higher than 0.
-    Remove any of these entries if you want those traps to appear.
+	Remove any of these entries if you want those traps to appear.
 	"""
 	from worlds.th143.worldgen.items import get_items_by_category, CATEGORY_TRAP
 
@@ -55,6 +54,14 @@ class TrapBlacklist(ItemSet):
 		CONST_TEMP_PREFIX + CONST_FILLER_NAME["count_down"],
 		CONST_TEMP_PREFIX + CONST_FILLER_NAME["count_down2"]
 	]
+
+class DeathLink(Toggle):
+	"""
+	Upon failing a Scene, everyone who enabled Death Link dies.
+	If someone else dies, the game will attempt to kill you as if you got hit by a bullet.
+	"""
+	display_name = "Death Link"
+	rich_text_doc = True
 
 class DeathLinkAmnesty(Range):
 	"""

@@ -30,6 +30,13 @@ def get_item_to_id_dict() -> dict[str, int]:
 		item_dict.setdefault(name, data.code)
 	return item_dict
 
+def get_item_by_id(item_id: int = 1) -> str:
+	for item_name, item_data in item_table.items():
+		if item_id == item_data.code:
+			return item_name
+
+	return "Invalid Item"
+
 def get_items_by_category(category: str) -> dict[str, ISCItemData]:
 	item_dict: dict[str, ISCItemData] = {}
 	for name, data in item_table.items():

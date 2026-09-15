@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from Options import PerGameCommonOptions, DeathLink, OptionGroup, ProgressionBalancing, Accessibility, \
+from Options import PerGameCommonOptions, OptionGroup, ProgressionBalancing, Accessibility, \
 	StartInventoryPool
 from .options_classes import *
 

@@ -53,16 +53,16 @@ class ISCStatTest(unittest.TestCase):
         # 6 Substitute Jizo
         # 7 Cursed Decoy Doll
         # 8 Miracle Mallet Replica
-        cheat_item_id = 8
+        cheat_item_id = 0
         cheat_item_level = 7 # purely cosmetic
-        cheat_item_unique_stat = 100
+        cheat_item_unique_stat = 500
         # See Touhou Wiki for what each item's unique stat is.
         # For items that use time as their unique stat, 60 = 1 second.
         # Bloodthirsty Yin-yang Orb's unique stat only ever stays at 60 in the vanilla game.
         # Four-Foot Magic Bomb starts at 128, its subsequent upgrades are multiplied by percentage rounded up.
         # e.g. 20% of 128 = 25.6, meaning 128 + 25.6 = 153.6, rounded up = 154
         # Miracle Mallet's unique stat only ever stays at 400 in the vanilla game.
-        cheat_item_use_count = 1
+        cheat_item_use_count = 15
         # The game displays up to 9 at most, but the actual count can go beyond that.
 
         # Write level.
