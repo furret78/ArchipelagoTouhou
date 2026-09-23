@@ -1,9 +1,9 @@
 from ..client.client_pymem import GameController
-from ..utils.utils_math import get_absolute_scene_id, clamp, read_bit_savedata, write_bit_savedata
-from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT
+from ..utils.utils_math import get_absolute_scene_id, clamp
+from ..variables.game_notice_id import CONST_NOTICE_ITEM_ID
+from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_ITEM_UPGRADE_STAT
 from ..variables.location_item_name import CONST_NICKNAME_NAME
-from ..worldgen.items import get_vanilla_level_max
-
+from ..worldgen.items import get_vanilla_level_max, get_vanilla_count_unique, get_vanilla_stat_unique
 
 TOTAL_NICKNAME_COUNT = len(CONST_NICKNAME_NAME)
 
@@ -12,22 +12,22 @@ class GameHandler:
 	Class that keeps track of some game data.
 	"""
 	previous_location_checked: list = []
+	item_stats: list[dict[str, int]] = []
+	nickname_data: int = 0
+	music_data: list[bool] = []
+	days_unlocked: int = 0
+	scenes_unlocked: list[int] = []
+	notice_queue: list[int] = []
+	is_executing_notice: bool = False
+	treasure_count: int = 0
+	treasure_minimum: int = 1
+	options = None
+	subitem_slot_unlocked: bool = False
+	subitems_unlocked: list[bool] = []
+	can_add_notice: bool = False
 
 	def __init__(self):
 		self.gameController = GameController()
-		self.item_stats: list[dict[str, int]] = []
-		self.nickname_data: int = 0
-		self.music_data: list[bool] = []
-		self.days_unlocked: int = 0
-		self.scenes_unlocked: list[int] = []
-		self.notice_queue: list[int] = []
-		self.is_executing_notice: bool = False
-		self.treasure_count: int = 0
-		self.treasure_minimum: int = 1
-		self.options = None
-		self.subitem_slot_unlocked: bool = False
-		self.subitems_unlocked: list[bool] = []
-
 		self.reset()
 		self.init_game()
 
@@ -42,57 +42,66 @@ class GameHandler:
 		self.item_stats = [
 			# Nimble Fabric
 			{
-				"level": 0,
-				"count": 0,
-				"stat": 0
+				"level": 0, # The level count.
+				"count": 0, # The Use Count upgrade count, not use count itself.
+				"stat": 0, # The stat upgrade count, not the stat itself.
+				"capped": True
 			},
 			# Tengu's Toy Camera
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Gap Folding Umbrella
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Ghastly Send-Off Lantern
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Bloodthirsty Yin-yang Orb
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Four-Foot Magic Bomb
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Substitute Jizo
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Cursed Decoy Doll
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			},
 			# Miracle Mallet (Replica)
 			{
 				"level": 0,
 				"count": 0,
-				"stat": 0
+				"stat": 0,
+				"capped": True
 			}
 		]
 		self.nickname_data = 0
@@ -111,6 +120,7 @@ class GameHandler:
 		self.subitems_unlocked = [
 			False, False, False, False, False, False, False, False
 		]
+		self.can_add_notice = False
 
 	def init_game(self):
 		if self.gameController is None: return
@@ -194,11 +204,13 @@ class GameHandler:
 	# Notice Utils
 	#
 	def add_notice_to_queue(self, notice_id: int):
+		if not self.can_add_notice: return
 		if notice_id <= 0: return
 		if notice_id in (22, 23, 24, 28, 29): return
 		if notice_id > 39: return
 
 		self.notice_queue.append(notice_id)
+		return
 
 	def execute_notice(self):
 		notice_queue_length = len(self.notice_queue)
@@ -220,6 +232,37 @@ class GameHandler:
 		else: self.notice_queue.clear()
 
 		self.gameController.write_notice_queue_count(total_notice_count)
+		return
+
+	def add_notice_item(self, item_id: int = 0, upgrade_type: int = 0):
+		"""
+		Function that adds notices according to item upgrades.
+
+		0 - Item unlocks.
+		1 - Use count upgrade (Some items never get count upgrades in vanilla, will reuse 0).
+		2 - Unique stat upgrade (Yin-yang Orb has no unique stat upgrade, will reuse 0).
+		"""
+		clean_item_id: int = clamp(item_id, 0, 8)
+		clean_notice_type: int = clamp(upgrade_type, 0, 2)
+
+		result_notice_id: int = CONST_NOTICE_ITEM_ID[clean_item_id][clean_notice_type]
+		if clean_notice_type <= 0 and result_notice_id == CONST_NOTICE_ITEM_ID[clean_item_id][0]: return
+
+		self.add_notice_to_queue(result_notice_id)
+		return
+
+	def add_notice_day_unlock(self, day_id: int = 1):
+		"""
+		Function that adds notices according to Day unlocked. Day 2-10, indexed from 1.
+		"""
+		clean_day_id: int = clamp(day_id - 2, 0, 8)
+		result_notice_id: int = 30 + clean_day_id
+
+		self.add_notice_to_queue(result_notice_id)
+		return
+
+	def add_notice_congrats(self):
+		self.add_notice_to_queue(39)
 
 	#
 	# Records Utils: Scenes
@@ -251,7 +294,7 @@ class GameHandler:
 		absolute_scene_id: int = get_absolute_scene_id(day_and_scene_id[0], day_and_scene_id[1])
 		self.gameController.set_scene_clear_item(absolute_scene_id, clean_item_id, final_value)
 
-	# Other
+	# Other Utils
 	def do_scene_skip(self, day_and_scene_id: tuple[int, int] = (1, 1)):
 		self.set_scene_generic_clear(day_and_scene_id, True)
 		for i in range(10):
@@ -261,6 +304,11 @@ class GameHandler:
 		final_value: int = 0x41
 		if not value: final_value = 0x00
 		self.gameController.toggle_next_scene_button(final_value)
+
+	def toggle_saving_replays(self, value: bool):
+		final_value: int = 1
+		if not value: final_value = 0
+		self.gameController.set_continues_used(final_value)
 
 	def add_days_unlocked(self):
 		self.days_unlocked = clamp(self.days_unlocked + 1, 0, 9)
@@ -368,6 +416,99 @@ class GameHandler:
 
 	def set_default_item_data(self):
 		for i in range(9):
+			# Set all used item data
 			for k in range(3):
-				self.set_item_data(i, 0, k)
-			self.set_item_data(i, get_vanilla_level_max(i))
+				self.set_item_data(item_id=i, value=0, data_type=k)
+				self.item_stats[i]["capped"] = True
+			# Set max level
+			self.set_item_data(item_id=i, value=get_vanilla_level_max(i), data_type=-1)
+
+	def set_day_all_scenes(self, day_id: int = 0):
+		"""
+		Function that unlocks all Scenes within a specific Day.
+		"""
+		self.scenes_unlocked[day_id] = CONST_DAY_SCENE_COUNT[day_id]
+
+	def set_all_days_full_unlock(self):
+		"""
+		Function that unlocks all Scenes in all Days.
+		"""
+		for i in range(9):
+			self.scenes_unlocked[i] = CONST_DAY_SCENE_COUNT[i]
+		self.update_day_and_scenes()
+
+	#
+	# Generic game status updates
+	#
+	def update_day_and_scenes(self):
+		# Clamp day unlock count.
+		self.days_unlocked = clamp(self.days_unlocked, 0, 9)
+		self.gameController.set_days_unlocked(self.days_unlocked)
+		# Clamp scenes count.
+		for day_id in range(10):
+			self.scenes_unlocked[day_id] = clamp(self.scenes_unlocked[day_id], 0, CONST_DAY_SCENE_COUNT[day_id])
+			self.gameController.set_day_scene_count(
+				day_id=day_id,
+				scene_count=self.scenes_unlocked[day_id] or 0
+			)
+		return
+
+	def update_cheat_items(self, is_level_based: bool = True):
+		# TODO: Add a branch for dealing with custom upgrades.
+		if is_level_based:
+			for item_id in range(9):
+				# TODO: Figure out a case for Max+ upgrades.
+				clean_level_num: int = clamp(
+					n=self.item_stats[item_id]["level"],
+					smallest=0,
+					largest=get_vanilla_level_max(item_id)
+				)
+				if clean_level_num < 0: continue
+				self.gameController.set_item_level(item_id, clean_level_num)
+				self.gameController.set_item_use_count(item_id, CONST_ITEM_UPGRADE_STAT[item_id]["count"][clean_level_num - 1])
+				self.gameController.set_item_stat(item_id, CONST_ITEM_UPGRADE_STAT[item_id]["stat"][clean_level_num - 1])
+		else:
+			for item_id in range(9):
+				CONST_USE_COUNT_LIST = get_vanilla_count_unique(item_id)
+				clean_use_count: int = clamp(
+					n=self.item_stats[item_id]["count"],
+					smallest=0,
+					largest=len(CONST_USE_COUNT_LIST)
+				)
+				if clean_use_count > 0:
+					self.gameController.set_item_use_count(item_id, CONST_USE_COUNT_LIST[clean_use_count - 1])
+
+				CONST_STAT_LIST = get_vanilla_stat_unique(item_id)
+				clean_stat_count: int = clamp(
+					n=self.item_stats[item_id]["stat"],
+					smallest=0,
+					largest=len(CONST_STAT_LIST)
+				)
+				if clean_stat_count > 0:
+					self.gameController.set_item_stat(item_id, CONST_STAT_LIST[clean_stat_count - 1])
+
+				if self.item_stats[item_id]["level"] < 0: self.item_stats[item_id]["level"] = 0
+				self.gameController.set_item_level(item_id, self.item_stats[item_id]["level"])
+		return
+
+	def update_sub_items(self, subitem_list):
+		if not self.options["subitem_individual"]:
+			self.subitems_unlocked = [
+				True, True, True, True, True, True, True, True
+			]
+
+		# Check for the Sub-item slot unlock.
+		self.gameController.set_subitem_slot_unlock(self.subitem_slot_unlocked)
+
+		# Check for each individual item.
+		if len(subitem_list) <= 0: return
+
+		for sub_id in subitem_list:
+			self.subitems_unlocked[clamp(sub_id - 51, 0, 8)] = True
+
+		self.correct_sub_item()
+		return
+
+	def correct_sub_item(self):
+		current_chosen_sub = self.gameController.get_subitem_chosen()
+		if not self.subitems_unlocked[current_chosen_sub]: self.force_lock_subitem_individual()

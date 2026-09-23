@@ -18,15 +18,15 @@ from CommonClient import (
 from NetUtils import NetworkItem
 from Utils import user_path
 from .client_handler import GameHandler
+from .. import CONST_TREASURE_ITEM_NAMES
 from ..utils.utils_get_name import get_item_index_save_name, get_location_name_nickname, get_location_name_music_room, \
 	get_location_name_scene, get_location_name_scene_with_item
-from ..utils.utils_math import client_directory_get_or_default, set_scene_clear_neutral, get_scene_clear_neutral, \
-	should_be_save_b, clamp
+from ..utils.utils_math import client_directory_get_or_default, set_scene_clear_neutral, get_scene_clear_neutral, clamp
 from ..variables.game_info import DISPLAY_NAME, SHORT_NAME, CLIENT_DATA_PATH, JSON_SLOT_ITEMS, JSON_SLOT_NAME, \
 	JSON_SLOT_CLEARS_A, JSON_SLOT_CLEARS_B, JSON_SLOT_PLAYTIME, JSON_SLOT_DEATHS, JSON_SLOT_SCENE_SKIP
 from ..client.client_cmd import CommandProccessorISC
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_MAX_PLAYTIME_CLIENT, CONST_MAX_DEATHS_CLIENT, \
-	CONST_MAX_SCENE_SKIPS
+	CONST_MAX_SCENE_SKIPS, CONST_ITEM_UPGRADE_STAT
 from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID, CONST_PROGRESSIVE_DAY, \
 	CONST_SUBITEM_SLOT_NAME
 from ..worldgen.items import item_table
@@ -34,6 +34,9 @@ from ..worldgen.world_locations.location_table import location_table
 
 CONST_TOTAL_NICKNAME_COUNT = len(CONST_NICKNAME_NAME)
 CONST_TOTAL_ITEM_COUNT = len(CONST_ITEM_SHORT_TO_ID.keys())
+CONST_ITEMCODE_TREASURE = item_table[CONST_TREASURE_ITEM_NAMES[0]].code
+CONST_ITEMCODE_DAYPROGRESS = item_table[CONST_PROGRESSIVE_DAY].code
+CONST_ITEMCODE_SUBSLOT = item_table[CONST_SUBITEM_SLOT_NAME].code
 
 class ContextISC(CommonContext):
 	"""Touhou 14.3 Game Context"""
@@ -92,6 +95,10 @@ class ContextISC(CommonContext):
 		self.is_game_running: bool = False
 		self.is_loading_data_setup: bool = True
 		self.completed_loading_save_data: bool = False
+		self.is_game_in_menu: bool = False
+		self.is_game_in_stage: bool = False
+		self.can_check_clear_locations: bool = False
+		self.begin_new_scene: bool = False
 
 		self.reset_context()
 
@@ -119,6 +126,12 @@ class ContextISC(CommonContext):
 		self.is_game_running = False
 		self.retrieved_custom_data = False
 		self.completed_loading_save_data = False
+		self.is_game_in_menu = False
+		self.is_game_in_stage = False
+		self.can_check_clear_locations = False
+		self.begin_new_scene = False
+
+		return
 
 	def make_gui(self):
 		ui = super().make_gui()
@@ -250,8 +263,13 @@ class ContextISC(CommonContext):
 			except Exception as e:
 				await asyncio.sleep(2)
 
-	def logger_debug(self, debug_msg: str):
+	def logger_debug(self, debug_msg: str = "", is_error: bool = False):
+		if is_error:
+			logger.error(debug_msg)
+			return
+
 		logger.info(debug_msg)
+		return
 
 	#
 	# Function that checks if the main bulk of the client should be running or not.
@@ -331,6 +349,7 @@ class ContextISC(CommonContext):
 	# Save data items
 	def handle_save_data_items(self, network_item_list: list[NetworkItem]):
 		day_unlock_count: int = 0
+		treasure_count: int = 0
 		scene_unlock_list = []
 		item_level_list = []
 		item_count_list = []
@@ -339,29 +358,119 @@ class ContextISC(CommonContext):
 
 		for network_item in network_item_list:
 			# Individually check each received item's code.
-			if network_item.item == item_table[CONST_PROGRESSIVE_DAY]:
+			if self.options["completion_type"] == 6 and network_item.item == CONST_ITEMCODE_TREASURE:
+				treasure_count += 1
+			elif self.options["progressive_day"] and network_item.item == CONST_ITEMCODE_DAYPROGRESS:
 				day_unlock_count += 1
-			elif network_item.item == item_table[CONST_SUBITEM_SLOT_NAME]:
-				pass
+			# Whether the Sub-item Slot should be unlocked.
+			elif network_item.item == CONST_ITEMCODE_SUBSLOT:
+				self.handler.subitem_slot_unlocked = True
+			# Scene Unlocks
 			elif network_item.item <= 10:
 				scene_unlock_list.append(network_item.item)
-			elif 12 <= network_item.item <= 20: pass
-			elif 21 <= network_item.item <= 29: pass
-			elif 32 <= network_item.item <= 40: pass
-			elif 51 <= network_item.item <= 59: pass
-			elif 41 <= network_item.item <= 48: pass
+			# Individual Sub-item Unlocks
+			elif self.options["subitem_individual"] and 51 <= network_item.item <= 59:
+				subitem_unlock_list.append(network_item.item)
+			# Item Level Up and Remove Cap items.
+			else:
+				if self.options["item_upgrade_separate"]:
+					if 32 <= network_item.item <= 40: item_count_list.append(network_item.item)
+					elif 41 <= network_item.item <= 48: item_stat_list.append(network_item.item)
+				elif 12 <= network_item.item <= 29: item_level_list.append(network_item.item)
 
-	# TODO: Call update_days in the Handler after this. Write that too.
-	def handle_days_unlocked(self, day_unlock_list):
-		pass
+		self.handle_scenes_unlocked(
+			day_unlock_count=day_unlock_count,
+			scene_unlock_list=scene_unlock_list
+		)
 
-	# TODO: Call update_scenes in the Handler after this. Write that too.
-	def handle_scenes_unlocked(self, scene_unlock_list):
-		pass
+		if self.options["subitem_individual"] and len(subitem_unlock_list) > 0:
+			self.handle_subitems(subitem_unlock_list)
+		if self.options["item_upgrade_separate"]:
+			self.handle_cheat_items_separate(item_count_list, item_stat_list)
+		else: self.handle_cheat_items_together(item_level_list)
 
-	# TODO: Call update_cheat_items in the Handler after this. Write that too.
-	def handle_cheat_items(self, filtered_list):
-		pass
+		# Only enable notices after the first save data load.
+		# This is to prevent spamming the game with notices upon hooking.
+		self.handler.can_add_notice = True
+
+		if self.options["completion_type"] != 6: return
+		if treasure_count > 0: self.handler.treasure_count += treasure_count
+
+	def handle_scenes_unlocked(self, day_unlock_count: int, scene_unlock_list):
+		if not self.options["progressive_day"]:
+			self.handler.days_unlocked = 9
+		else:
+			for i in range(day_unlock_count):
+				self.handler.add_notice_day_unlock(
+					day_id=self.handler.days_unlocked + (i + 1)
+				)
+			self.handler.days_unlocked += day_unlock_count
+
+		for scene_unlock_id in scene_unlock_list:
+			if scene_unlock_id > 10 or scene_unlock_id < 1:
+				self.logger_debug(
+					f"Item {scene_unlock_id} (Name: {item_table[scene_unlock_id]}) is not Progressive Scene. Skipped processing this one."
+				)
+				continue
+
+			self.handler.scenes_unlocked[scene_unlock_id - 1] += 1
+
+		self.handler.update_day_and_scenes()
+
+	def handle_subitems(self, subitem_unlocks):
+		self.handler.update_sub_items(subitem_unlocks)
+
+	def handle_cheat_items_together(self, item_level):
+		"""
+		Handles Cheat item statistics. This only handles levels.
+		"""
+		# TODO: Add branch for Max+ upgrades.
+		if len(item_level) <= 0: return
+		# Iterate over each entry in the list.
+		for received_item_id in item_level:
+			# Remove Level Cap items.
+			if received_item_id >= 21:
+				self.handler.item_stats[received_item_id - 20]["capped"] = False
+			# The actual item levels.
+			else:
+				used_item_id: int = received_item_id - 12
+				current_item_level: int = self.handler.item_stats[used_item_id]["level"]
+				self.handler.add_notice_item(
+					item_id=used_item_id,
+					upgrade_type=CONST_ITEM_UPGRADE_STAT[used_item_id]["notice"][current_item_level]
+				)
+				self.handler.item_stats[used_item_id]["level"] += 1
+
+		self.handler.update_cheat_items(True)
+
+	def handle_cheat_items_separate(self, item_count, item_stat):
+		"""
+		Handles Cheat item statistics. Levels are unused.
+		"""
+		def notice_if_level_zero(item_id_received: int):
+			current_item_level: int = self.handler.item_stats[item_id_received]["level"]
+			if current_item_level == 1: self.handler.add_notice_item(item_id_received, 0)
+
+		# TODO: Add branch for Max+ and custom upgrades.
+		if len(item_count) <= 0 and len(item_stat) <= 0: return
+		# Iterate over each entry in the list.
+		for received_item_id in item_count:
+			# Use Count upgrades
+			if 32 <= received_item_id <= 40:
+				used_item_id: int = received_item_id - 32
+				self.handler.add_notice_item(item_id=used_item_id, upgrade_type=1)
+				self.handler.item_stats[used_item_id]["level"] += 1
+				self.handler.item_stats[used_item_id]["count"] += 1
+				notice_if_level_zero(used_item_id)
+			# Unique Stat upgrades
+			elif 41 <= received_item_id <= 49:
+				used_item_id: int = received_item_id - 41
+				self.handler.add_notice_item(item_id=used_item_id, upgrade_type=2)
+				self.handler.item_stats[used_item_id]["level"] += 1
+				self.handler.item_stats[used_item_id]["stat"] += 1
+				notice_if_level_zero(used_item_id)
+
+		self.handler.update_cheat_items(False)
 
 	async def handle_treasure_hunt(self, treasure_count):
 		pass
@@ -416,7 +525,7 @@ class ContextISC(CommonContext):
 		if given_location not in self.locations_checked: return False
 		return True
 
-	async def update_locations_checked(self):
+	async def update_locations_checked(self, ignore_prohibition: bool = False):
 		"""
 		Check if any locations has been checked since this was last called.
 		If there is, send a message and update the checked location list.
@@ -426,7 +535,7 @@ class ContextISC(CommonContext):
 		new_locations = []
 
 		# Scene Clears
-		if self.handler.is_game_paused():
+		if self.can_check_clear_locations or ignore_prohibition:
 			for day_id in range(10):
 				for scene_id in range(CONST_DAY_SCENE_COUNT[day_id]):
 					used_day_id: int = day_id + 1
@@ -667,13 +776,14 @@ class ContextISC(CommonContext):
 		"""
 		Handles transferring from the game menu to stage.
 		"""
-		pass
+		self.logger_debug("Going from menu to scene...")
 
 	async def transfer_from_stage_to_menu(self):
 		"""
 		Handles transferring from stage to the game menu.
 		"""
-		pass
+		self.logger_debug("Going from scene to menu...")
+		self.can_check_clear_locations = False
 
 	# TODO
 	# Stage Reset
@@ -809,18 +919,91 @@ class ContextISC(CommonContext):
 		return True
 
 	async def main_loop(self):
-		pass
+		"""
+		Main loop that runs global functions, menu or stage.
+		"""
+		try:
+			while self.should_run_loop():
+				if self.completed_loading_save_data: await self.update_locations_checked()
+				self.handler.execute_notice()
+				await asyncio.sleep(0.5)
+		except Exception as e:
+			self.in_error = True
+			self.logger_debug(
+				is_error=True,
+				debug_msg="MAIN loop error:\n" + traceback.format_exc()
+			)
 
 	async def menu_loop(self):
-		pass
+		"""
+		Loop that only does things in the menu.
+		Does not get paused during replays.
+		"""
+		try:
+			while self.should_run_loop():
+				await asyncio.sleep(0.5)
 
-	async def stage_loop(self):
-		pass
+				if self.handler.is_game_in_stage() and not self.handler.is_game_replay(): continue
+
+				if self.is_game_in_stage:
+					self.is_game_in_stage = False
+				if not self.is_game_in_menu:
+					self.is_game_in_menu = True
+					await self.transfer_from_stage_to_menu()
+		except Exception as e:
+			self.in_error = True
+			self.logger_debug(
+				is_error=True,
+				debug_msg="MENU loop error:\n" + traceback.format_exc()
+			)
+
+	async def game_loop(self):
+		"""
+		Loop that only does things in a scene.
+		Does not run during replays.
+		"""
+		try:
+			while self.should_run_loop():
+				await asyncio.sleep(0.5)
+
+				if not self.handler.is_game_in_stage() or self.handler.is_game_replay(): continue
+
+				if self.is_game_in_menu: self.is_game_in_menu = False
+				if not self.is_game_in_stage:
+					self.is_game_in_stage = True
+					await self.transfer_from_menu_to_stage()
+
+				if not self.can_check_clear_locations and self.handler.is_game_paused():
+					self.can_check_clear_locations = True
+				if self.can_check_clear_locations and not self.handler.is_game_paused():
+					self.can_check_clear_locations = False
+
+				# If a scene was just freshly restarted/had just begun.
+				if not self.begin_new_scene and self.handler.is_stage_reset():
+					self.begin_new_scene = True
+					self.handler.toggle_next_scene_button(True)
+					self.handler.toggle_saving_replays(True)
+					self.logger_debug("Scene has been restarted.")
+				if self.begin_new_scene and not self.handler.is_stage_reset():
+					self.begin_new_scene = False
+					self.logger_debug("Scene has finished restarting.")
+		except Exception as e:
+			self.in_error = True
+			self.logger_debug(
+				is_error=True,
+				debug_msg="GAME loop error:\n" + traceback.format_exc()
+			)
 
 	async def trap_loop(self):
+		"""
+		Loop that handles traps.
+		"""
 		pass
 
 	async def deathlink_loop(self):
+		"""
+		Loop that handles Death Links.
+		"""
 		pass
 
 
@@ -898,7 +1081,7 @@ async def game_watcher_async(ctx: ContextISC):
 			loops = [
 				asyncio.create_task(ctx.main_loop()),
 				asyncio.create_task(ctx.menu_loop()),
-				asyncio.create_task(ctx.stage_loop()),
+				asyncio.create_task(ctx.game_loop()),
 				asyncio.create_task(ctx.trap_loop())
 			]
 			if ctx.deathlink_enabled:
@@ -943,7 +1126,7 @@ def client_launch():
 	parser = get_base_parser(description=SHORT_NAME + " Client")
 	args, _ = parser.parse_known_args()
 
-	Utils.init_logging("HBMClient")
+	Utils.init_logging("ClientISC")
 
 	colorama.init()
 	asyncio.run(main(args))

@@ -20,9 +20,7 @@ class SkillDifficulty(Choice):
 
 	@classmethod
 	def get_option_name(cls, value: T) -> str:
-		if value == cls.option_easy:
-			return "Easy Mode"
-		elif value == cls.option_normal:
+		if value == cls.option_normal:
 			return "Normal Mode"
 		elif value == cls.option_hard:
 			return "Hard Mode"
@@ -71,7 +69,7 @@ class DeathLinkAmnesty(Range):
 	display_name = "Death Link Amnesty"
 
 	range_start = 0
-	range_end = 15
+	range_end = 30
 	default = 0
 
 class InvincAgainstDeathLink(DefaultOnToggle):
@@ -154,8 +152,8 @@ class TreasurePercent(Range):
 class ProgressiveDay(DefaultOnToggle):
 	"""
 	Whether the game will begin with all Days unlocked or not.
-	Enabled/Vanilla: Each Day must be progressively unlocked up to Day 10.
-	Disabled: All Days are unlocked from the start, but not all Scenes will be available.
+	If enabled, each Day must be progressively unlocked up to Day 10.
+	Otherwise, all Days are unlocked from the start.
 	"""
 	display_name = "Progressive Day"
 
@@ -324,7 +322,7 @@ class ItemUpgradeSeparate(Toggle):
 
 class ItemUpgradeRemoveCap(Choice):
 	"""
-	Only applicable if Cheat Item Progression: Max+ Levels or Rebalanced is enabled.
+	Only applicable if Cheat Item Progression is Max+ Levels or Rebalanced, and Separate Upgrades is disabled.
 	Configures whether the player would require a Remove Level Cap item to increase item level past the vanilla maximum.
 
 	0. Disabled - Has no vanilla level cap in place.

@@ -82,32 +82,32 @@ def get_random_filler_item_name(world) -> str:
 #
 # Other various Item utils
 #
-def get_vanilla_level_max(item_id: int) -> int:
+def get_vanilla_level_max(item_id: int = 0) -> int:
 	"""
 	How many upgrade items are needed to reach the max vanilla level.
 	Item ID is indexed from 0.
 	"""
 	return len(CONST_ITEM_UPGRADE_STAT[item_id]["level"])
 
-def get_vanilla_count_max(item_id: int) -> int:
+def get_vanilla_count_max(item_id: int = 0) -> int:
 	"""
 	How many use count upgrades are needed to reach the max vanilla permitted.
 	Item ID is indexed from 0.
 	"""
 	return len(get_vanilla_count_unique(item_id))
 
-def get_vanilla_count_unique(item_id: int) -> list[int]:
+def get_vanilla_count_unique(item_id: int = 0) -> list[int]:
 	item_use_count_list = CONST_ITEM_UPGRADE_STAT[item_id]["count"]
 	return [w for w in item_use_count_list if item_use_count_list.count(i) < 2]
 
-def get_vanilla_stat_max(item_id: int) -> int:
+def get_vanilla_stat_max(item_id: int = 0) -> int:
 	"""
 	How many unique stat upgrades are needed to reach the max vanilla permitted.
 	Item ID is indexed from 0.
 	"""
 	return len(get_vanilla_stat_unique(item_id))
 
-def get_vanilla_stat_unique(item_id: int) -> list[int]:
+def get_vanilla_stat_unique(item_id: int = 0) -> list[int]:
 	unique_stat_count_list = CONST_ITEM_UPGRADE_STAT[item_id]["stat"]
 	return [w for w in unique_stat_count_list if unique_stat_count_list.count(i) < 2]
 
@@ -361,7 +361,7 @@ CATEGORY_TREASURE = "Treasure"
 
 # Some of the data here is automatically filled out with For loops below.
 item_table: dict[str, ISCItemData] = {
-	# Progression - ID 1-58
+	# Progression - ID 1-59
 	# Day Unlock - ID 11
 	CONST_PROGRESSIVE_DAY: ISCItemData(CATEGORY_SCENE_PROGRESS, 11, ItemClassification.progression),
 	# Sub-item Slot Unlock - ID 30
@@ -398,6 +398,7 @@ item_table: dict[str, ISCItemData] = {
 for i in range(10):
 	item_table[get_scene_unlock_name(i + 1)] = ISCItemData(CATEGORY_SCENE_PROGRESS, (i + 1), ItemClassification.progression)
 
+# 9 items
 for k in range(9):
 	# Item Level Up - ID 12-20
 	item_table[get_item_name_level(k)] = ISCItemData(CATEGORY_ITEM_LEVEL, (12 + k), ItemClassification.progression)
@@ -405,10 +406,10 @@ for k in range(9):
 	item_table[get_item_remove_cap(k)] = ISCItemData(CATEGORY_ITEM_UPGRADE, (21 + k), ItemClassification.progression)
 	# Item Use Count Upgrades - ID 32-40
 	item_table[get_item_name_usage(k)] = ISCItemData(CATEGORY_ITEM_UPGRADE, (32 + k), ItemClassification.progression)
-	# Individual Sub-item Unlocks - ID 51-58
+	# Individual Sub-item Unlocks - ID 51-59
 	item_table[get_item_name_subitem(k)] = ISCItemData(CATEGORY_SUBITEM, (51 + k), ItemClassification.progression)
 	if k == 4: continue
-	# Item Unique Stat Upgrades - ID 41-50 (no yin-yang upgrades)
+	# Item Unique Stat Upgrades - ID 41-49 (no yin-yang upgrades)
 	item_table[get_item_name_stat(k)] = ISCItemData(CATEGORY_ITEM_UPGRADE, (41 + k), ItemClassification.progression)
 
 # Useless Filler - ID 100+
