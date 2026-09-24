@@ -3,7 +3,8 @@ import unittest
 import pymem
 
 from BaseClasses import MultiWorld
-from ..variables.asm_code_address import ADDR_STATIC_ITEM_UPGRADES, ADDR_STATIC_MALLET_SUB4, ADDR_STATIC_MALLET_SUB3
+from ..variables.asm_code_address import ADDR_STATIC_ITEM_UPGRADES, ADDR_STATIC_MALLET_SUB4, ADDR_STATIC_MALLET_SUB3, \
+    ADDR_STATIC_BESTSHOT_NAME, ADDR_STATIC_CHEAT_CODE, ADDR_STATIC_CHEAT_SOUND
 
 
 def getPointerAddress(pm, base, offsets):

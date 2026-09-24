@@ -50,7 +50,7 @@ class ContextISC(CommonContext):
 		self.location_ap_id_to_name = None
 		self.options = None
 		self.is_connected = None
-		self.in_error = None
+		self.in_error = False
 		self.location_name_to_ap_id = None
 		self.all_location_ids = []
 		self.previous_location_checked = []
@@ -248,8 +248,13 @@ class ContextISC(CommonContext):
 
 		while self.handler is None:
 			try:
-				self.handler: GameHandler = GameHandler()
+				self.logger_debug("Attempting game connection now.")
+				self.handler = GameHandler()
 			except Exception as e:
+				self.logger_debug(
+					is_error=True,
+					debug_msg="Game connection error:\n" + traceback.format_exc()
+				)
 				await asyncio.sleep(2)
 
 	async def reconnect_to_game(self):
@@ -260,7 +265,12 @@ class ContextISC(CommonContext):
 		while self.handler.gameController is None:
 			try:
 				self.handler.reconnect()
+				self.logger_debug("Attempting game reconnection now.")
 			except Exception as e:
+				self.logger_debug(
+					is_error=True,
+					debug_msg="Game reconnection error:\n" + traceback.format_exc()
+				)
 				await asyncio.sleep(2)
 
 	def logger_debug(self, debug_msg: str = "", is_error: bool = False):
@@ -853,7 +863,7 @@ class ContextISC(CommonContext):
 	async def write_last_item_list(self):
 		# Writes the last received item index to a .json file named "th185ap".
 		# Initial check to make sure the client has not reset itself.
-		if not self.is_connected and not self.inError: return
+		if not self.is_connected and not self.in_error: return
 		if len(self.all_received_items) <= 0: return
 
 		json_file_name = get_item_index_save_name(self.seed_name, self.team, self.slot)
@@ -1036,6 +1046,7 @@ async def game_watcher_async(ctx: ContextISC):
 					logger.error(traceback.format_exc())
 
 		# Trying to make first connection to the game
+		# TODO: Game is stuck at this step, despite successful connection.
 		if ctx.handler is None and not ctx.in_error:
 			logger.info(f"Trying to find {SHORT_NAME} game process...")
 			asyncio.create_task(ctx.connect_to_game())
@@ -1061,6 +1072,7 @@ async def game_watcher_async(ctx: ContextISC):
 
 			if not ctx.is_game_running:
 				ctx.is_game_running = ctx.handler.gameController.check_if_in_game()
+				logger.info(f"Is the game running? {ctx.is_game_running}")
 				await asyncio.sleep(1)
 				continue
 
@@ -1088,7 +1100,7 @@ async def game_watcher_async(ctx: ContextISC):
 				loops.append(asyncio.create_task(ctx.deathlink_loop()))
 
 			# Infinitely loop if there is no error.
-			while not ctx.exit_event.is_set() and not ctx.inError and ctx.server:
+			while not ctx.exit_event.is_set() and not ctx.in_error and ctx.server:
 				await asyncio.sleep(1)
 			# If there is, exit to restart the connection.
 			# Stop all loops if possible at this phase.

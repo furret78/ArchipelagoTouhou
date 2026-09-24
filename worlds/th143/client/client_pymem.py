@@ -113,10 +113,10 @@ class GameController:
 		for offset_3byte in ADDR_STATIC_MALLET_SUB3:
 			self.pm.write_bytes(self.pm.base_address + offset_3byte, bytes([0x90, 0x90, 0x90]), 3)
 		# Disable forced max level caps. That can be set later.
-		for offset in ADDR_STATIC_MAX_LEVEL:
-			self.pm.write_bytes(self.pm.base_address + offset, bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]), 7)
+		for max_level_offset in ADDR_STATIC_MAX_LEVEL:
+			self.pm.write_bytes(self.pm.base_address + max_level_offset, bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]), 7)
 		# Disable cheat code
-		for i in range(18):
+		for i in range(19):
 			self.pm.write_bytes(self.pm.base_address + ADDR_STATIC_CHEAT_CODE + i, bytes([0x90]), 1)
 		self.pm.write_bytes(self.pm.base_address + ADDR_STATIC_CHEAT_SOUND, bytes([0x10]), 1)
 		# Disable unlocking Next Day
@@ -135,9 +135,9 @@ class GameController:
 				for j in range(byte_length):
 					self.pm.write_bytes(self.pm.base_address + offset + j, bytes([0x90]), 1)
 		# Disable forcing item equips during certain scenes.
-		for offset in ADDR_STATIC_FORCE_ITEM:
+		for force_item_offset in ADDR_STATIC_FORCE_ITEM:
 			self.pm.write_bytes(
-				address=self.pm.base_address + offset,
+				address=self.pm.base_address + force_item_offset,
 				value=bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]),
 				length=10
 			)
@@ -148,23 +148,7 @@ class GameController:
 			length=7
 		)
 
-		# Change various folder names
-		# BestShot folder change to sc_143ap
-		for offset in ADDR_STATIC_BESTSHOT_NAME:
-			self.pm.write_bytes(
-				address=self.pm.base_address + offset,
-				value=bytes([0x73, 0x63, 0x5F, 0x31, 0x34, 0x33, 0x61, 0x70]),
-				length=8
-			)
-		# Replay folder to rep_ap
-		for offset in ADDR_STATIC_REPLAY_NAME:
-			self.pm.write_bytes(
-				address=self.pm.base_address + offset,
-				value=bytes([0x72, 0x65, 0x70, 0x5F, 0x61, 0x70]),
-				length=6
-			)
-		# Scorefile name to scoreap143.dat
-		self.pm.write_bytes(self.pm.base_address + ADDR_STATIC_SCOREFILE_NAME, bytes([0x61, 0x70]), 2)
+		# TODO: Changing string names is shelved for now until I figure out how to bypass write protections.
 
 		# Override default scene locks
 		for offset in ADDR_STATIC_SCENE_LOCKS:
