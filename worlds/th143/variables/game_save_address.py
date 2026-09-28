@@ -77,9 +77,10 @@ OFFSET_ITEM_STAT_NUM = 0x28
 def get_item_clear_record_offset(absolute_scene_id: int = 1, item_id: int = 0):
 	"""
 	Returns the offset for whether an Item has been used to clear a specific Scene.
+	Item ID is indexed from 0.
 	If not 0, the item was used before.
 	"""
-	return item_id * 4 + absolute_scene_id * 0x314 + 18
+	return ((item_id + 1) * 4) + (absolute_scene_id * 0x314) + 18
 
 def get_scene_clear_offset(absolute_scene_id: int = 1):
 	"""

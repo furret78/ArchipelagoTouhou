@@ -25,7 +25,8 @@ class ISCStatTest(unittest.TestCase):
 
     def test_read_bit(self):
         test_bit_array = 0b1101
-        print(test_bit_array & 1 << 1 != 0) # Read right to left, indexed at 0.
+        index = 1
+        print(test_bit_array & 1 << index != 0) # Read right to left, indexed at 0.
 
     def test_get_absolute_scene_id(self):
         print(get_absolute_scene_id(6, 7))

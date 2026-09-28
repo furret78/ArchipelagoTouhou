@@ -167,6 +167,8 @@ class GameController:
 		previous_playtime = self.get_address_scorefile_base(OFFSET_PLAYTIME_HIGH)
 		self.pm.write_int(previous_playtime, 0)
 
+		self.bypass_fresh_save_lock()
+
 	def init_game_asm_playtime(self, playtime_mult: int):
 		playtime_req_list = CONST_PLAYTIME_REQUIRE[clamp(playtime_mult, 0, 2)]
 		for i in range(3):
@@ -187,6 +189,10 @@ class GameController:
 	def set_main_item_tier(self, tier: int):
 		addrMainItemTier = self.get_address_scorefile_base(OFFSET_ITEM_TIER_PROGRESS)
 		self.pm.write_short(addrMainItemTier, tier)
+
+	def bypass_fresh_save_lock(self):
+		addrDayOne = self.get_address_scorefile_base(OFFSET_DAY_ONE_UNLOCK)
+		self.pm.write_bool(addrDayOne, True)
 
 	#
 	# Player-specific functions
@@ -234,8 +240,11 @@ class GameController:
 		self.pm.write_int(addrMainItemUse, clamp(use_count, 0, 99))
 
 	def get_current_game_tick(self) -> int:
-		addrCurrentGameTick = self.get_address_custom_base(ADDR_BASE_GAME_TICK, OFFSET_GAME_TICK)
-		return self.pm.read_int(addrCurrentGameTick)
+		try:
+			addrCurrentGameTick = self.get_address_custom_base(ADDR_BASE_GAME_TICK, OFFSET_GAME_TICK)
+			return self.pm.read_int(addrCurrentGameTick)
+		except:
+			return -1
 
 	#
 	# Menu utilities
@@ -383,11 +392,11 @@ class GameController:
 	#
 	# Level
 	def get_item_level(self, item_id: int) -> int:
-		addrLevel = self.get_address_scorefile_base(get_item_level_offset(item_id) + OFFSET_ITEM_LEVEL_NUM)
+		addrLevel = self.get_address_scorefile_base(get_item_data_offset(item_id) + OFFSET_ITEM_LEVEL_NUM)
 		return self.pm.read_int(addrLevel)
 
 	def set_item_level(self, item_id: int, level: int):
-		addrLevel = self.get_address_scorefile_base(get_item_level_offset(item_id) + OFFSET_ITEM_LEVEL_NUM)
+		addrLevel = self.get_address_scorefile_base(get_item_data_offset(item_id) + OFFSET_ITEM_LEVEL_NUM)
 		self.pm.write_int(addrLevel, level)
 
 	# Use count

@@ -268,46 +268,42 @@ class GameHandler:
 	# Records Utils: Scenes
 	#
 	# Retrieval from in-game data.
-	def get_scene_generic_clear(self, day_and_scene_id: tuple[int, int] = (1, 1)) -> bool:
-		absolute_scene_id: int = get_absolute_scene_id(day_and_scene_id[0], day_and_scene_id[1])
+	def get_scene_generic_clear(self, day_num: int = 1, scene_num: int = 1) -> bool:
+		absolute_scene_id: int = get_absolute_scene_id(day_num, scene_num)
 		return self.gameController.get_scene_clear_generic(absolute_scene_id) > 0
 
-	def set_scene_generic_clear(self, day_and_scene_id: tuple[int, int] = (1, 1), value: bool = False):
+	def set_scene_generic_clear(self, day_num: int = 1, scene_num: int = 1, value: bool = False):
 		final_value: int = 0
-		if value:
-			if self.get_scene_generic_clear(day_and_scene_id): return
-			final_value = 1
-		absolute_scene_id: int = get_absolute_scene_id(day_and_scene_id[0], day_and_scene_id[1])
+		if value: final_value = 1
+		absolute_scene_id: int = get_absolute_scene_id(day_num, scene_num)
 		self.gameController.set_scene_clear_generic(absolute_scene_id, final_value)
 
-	def get_scene_item_clear(self, day_and_scene_id: tuple[int, int] = (1, 1), item_id: int = 0) -> bool:
+	def get_scene_item_clear(self, day_num: int = 1, scene_num: int = 1, item_id: int = 0) -> bool:
 		clean_item_id: int = clamp(item_id, 0, 9)
-		absolute_scene_id: int = get_absolute_scene_id(day_and_scene_id[0], day_and_scene_id[1])
+		absolute_scene_id: int = get_absolute_scene_id(day_num, scene_num)
 		return self.gameController.get_scene_clear_item(absolute_scene_id, clean_item_id) > 0
 
-	def set_scene_item_clear(self, day_and_scene_id: tuple[int, int] = (1, 1), item_id: int = 0, value: bool = False):
+	def set_scene_item_clear(self, day_num: int = 1, scene_num: int = 1, item_id: int = 0, value: bool = False):
 		final_value: int = 0
-		if value:
-			if self.get_scene_item_clear(day_and_scene_id, item_id): return
-			final_value = 1
+		if value: final_value = 0x10000
 		clean_item_id: int = clamp(item_id, 0, 9)
-		absolute_scene_id: int = get_absolute_scene_id(day_and_scene_id[0], day_and_scene_id[1])
+		absolute_scene_id: int = get_absolute_scene_id(day_num, scene_num)
 		self.gameController.set_scene_clear_item(absolute_scene_id, clean_item_id, final_value)
 
 	# Other Utils
-	def do_scene_skip(self, day_and_scene_id: tuple[int, int] = (1, 1)):
-		self.set_scene_generic_clear(day_and_scene_id, True)
-		for i in range(10):
-			self.set_scene_item_clear(day_and_scene_id, i, True)
+	def do_scene_skip(self, day_num: int = 1, scene_num: int = 1):
+		self.set_scene_generic_clear(day_num, scene_num, True)
+		for item_id in range(11):
+			self.set_scene_item_clear(day_num, scene_num, item_id, True)
 
-	def toggle_next_scene_button(self, value: bool):
+	def toggle_next_scene_button(self, is_disabled: bool = False):
 		final_value: int = 0x41
-		if not value: final_value = 0x00
+		if is_disabled: final_value = 0x00
 		self.gameController.toggle_next_scene_button(final_value)
 
-	def toggle_saving_replays(self, value: bool):
-		final_value: int = 1
-		if not value: final_value = 0
+	def toggle_saving_replays(self, is_disabled: bool = False):
+		final_value: int = 0
+		if is_disabled: final_value = 1
 		self.gameController.set_continues_used(final_value)
 
 	def add_days_unlocked(self):
@@ -323,8 +319,8 @@ class GameHandler:
 		Retrieves the number of cleared Scenes in the specified Day.
 		"""
 		clear_count: int = 0
-		for scene_id in CONST_DAY_SCENE_COUNT[day_id - 1]:
-			if self.get_scene_generic_clear((day_id, scene_id + 1)):
+		for scene_id in range(CONST_DAY_SCENE_COUNT[day_id - 1]):
+			if self.get_scene_generic_clear(day_id, scene_id + 1):
 				clear_count += 1
 		return clear_count
 

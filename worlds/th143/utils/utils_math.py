@@ -17,7 +17,8 @@ def read_bit(bitarray: int = 0, index: int = 0) -> bool:
 	Index cannot go higher than 511 (512 bits).
 	"""
 	if index > 511: return False
-	return bitarray & 1 << index != 0
+	print(f"Read bitarray: {str(bitarray)}")
+	return (bitarray & 1 << index) != 0
 
 def write_bit(bitarray: int = 0, index: int = 0, value: bool = False) -> int:
 	"""
@@ -30,6 +31,7 @@ def write_bit(bitarray: int = 0, index: int = 0, value: bool = False) -> int:
 		new_bitarray |= 1 << index
 	else:
 		new_bitarray &= ~(1 << index)
+	print(f"Post-modification: {str(new_bitarray)}")
 	return new_bitarray
 
 def write_bit_savedata(data_int: int = 0, index: int = 0, value: bool = False) -> int:
@@ -48,6 +50,8 @@ def should_be_save_b(absolute_scene_id: int = 0) -> bool:
 	return absolute_scene_id > 49
 
 def get_scene_clear_neutral(save_data_ab: tuple[int, int], day_scene_id: tuple[int, int] = (1, 1), item_id: int = 0) -> bool:
+	if not isinstance(save_data_ab[0], int) or not isinstance(save_data_ab[1], int):
+		raise TypeError(f"Save data ints must be ints! SaveDataA: {str(save_data_ab[0])}, SaveDataB: {str(save_data_ab[1])}.")
 	absolute_scene_id: int = get_absolute_scene_id(day_scene_id[0], day_scene_id[1]) - 1
 	bit_position: int = get_bit_index_used(absolute_scene_id, item_id)
 	if should_be_save_b(absolute_scene_id): # Use Save Data B.
@@ -56,7 +60,7 @@ def get_scene_clear_neutral(save_data_ab: tuple[int, int], day_scene_id: tuple[i
 		return read_bit_savedata(save_data_ab[0], bit_position)
 
 def set_scene_clear_neutral(save_data_ab: tuple[int, int], day_scene_id: tuple[int, int] = (1, 1), item_id: int = 0, value: bool = False) -> tuple[int, int]:
-	absolute_scene_id: int = get_absolute_scene_id(day_scene_id[0], day_scene_id[1])
+	absolute_scene_id: int = get_absolute_scene_id(day_scene_id[0], day_scene_id[1]) - 1
 	bit_position: int = get_bit_index_used(absolute_scene_id, item_id)
 	if should_be_save_b(absolute_scene_id):
 		new_save_data = write_bit_savedata(save_data_ab[1], bit_position, value)

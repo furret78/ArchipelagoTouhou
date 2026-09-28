@@ -28,7 +28,7 @@ from ..client.client_cmd import CommandProccessorISC
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_MAX_PLAYTIME_CLIENT, CONST_MAX_DEATHS_CLIENT, \
 	CONST_MAX_SCENE_SKIPS, CONST_ITEM_UPGRADE_STAT
 from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID, CONST_PROGRESSIVE_DAY, \
-	CONST_SUBITEM_SLOT_NAME
+	CONST_SUBITEM_SLOT_NAME, CONST_SCENE_SKIP_NAME
 from ..worldgen.items import item_table
 from ..worldgen.world_locations.location_table import location_table
 
@@ -41,7 +41,7 @@ CONST_ITEMCODE_SUBSLOT = item_table[CONST_SUBITEM_SLOT_NAME].code
 class ContextISC(CommonContext):
 	"""Touhou 14.3 Game Context"""
 	# Game Handler
-	handler: GameHandler = None
+	handler = None
 
 	def __init__(self, server_address: Optional[str], password: Optional[str]) -> None:
 		super().__init__(server_address, password)
@@ -99,6 +99,7 @@ class ContextISC(CommonContext):
 		self.is_game_in_stage: bool = False
 		self.can_check_clear_locations: bool = False
 		self.begin_new_scene: bool = False
+		self.has_saved_data_internally: bool = False
 
 		self.reset_context()
 
@@ -130,6 +131,7 @@ class ContextISC(CommonContext):
 		self.is_game_in_stage = False
 		self.can_check_clear_locations = False
 		self.begin_new_scene = False
+		self.has_saved_data_internally = False
 
 		return
 
@@ -176,14 +178,14 @@ class ContextISC(CommonContext):
 			for data_index in range(len(self.custom_data_keys_list)):
 				if self.custom_data_keys_list[data_index] in args["keys"]:
 					if args["keys"][self.custom_data_keys_list[data_index]] is not None:
-						new_data = self.custom_data_keys_list[data_index]
+						new_data = args["keys"][self.custom_data_keys_list[data_index]]
 						match data_index:
 							# Save Data A (512 bits only)
 							case 0:
-								self.save_data_a = new_data
+								self.save_data_a = new_data or 0x0
 							# Save Data B (512 bits only)
 							case 1:
-								self.save_data_b = new_data
+								self.save_data_b = new_data or 0x0
 							# Playtime Accumulated (Maxes out at 3 600 000)
 							case 2:
 								self.save_playtime = clamp(new_data, 0, CONST_MAX_PLAYTIME_CLIENT)
@@ -248,13 +250,8 @@ class ContextISC(CommonContext):
 
 		while self.handler is None:
 			try:
-				self.logger_debug("Attempting game connection now.")
 				self.handler = GameHandler()
 			except Exception as e:
-				self.logger_debug(
-					is_error=True,
-					debug_msg="Game connection error:\n" + traceback.format_exc()
-				)
 				await asyncio.sleep(2)
 
 	async def reconnect_to_game(self):
@@ -265,12 +262,7 @@ class ContextISC(CommonContext):
 		while self.handler.gameController is None:
 			try:
 				self.handler.reconnect()
-				self.logger_debug("Attempting game reconnection now.")
 			except Exception as e:
-				self.logger_debug(
-					is_error=True,
-					debug_msg="Game reconnection error:\n" + traceback.format_exc()
-				)
 				await asyncio.sleep(2)
 
 	def logger_debug(self, debug_msg: str = "", is_error: bool = False):
@@ -295,15 +287,18 @@ class ContextISC(CommonContext):
 		await self.send_msgs([{"cmd": "Get", "keys": self.custom_data_keys_list}])
 		await self.send_msgs([{"cmd": "SetNotify", "keys": self.custom_data_keys_list}])
 
+	def get_total_scene_skip_count(self) -> int:
+		return self.all_received_items.count(CONST_SCENE_SKIP_NAME)
+
 	# TODO
 	# Handle incoming items
 	#
 	async def handle_received_items(self, network_index, network_items_list):
 		"""
-		        Handle items received from the server. Since some save data is also
-		        embedded into the items list, the index will be ignored for them specifically.
-		        The rest of the items are separated into queues and processed simultaneously.
-		        """
+		Handle items received from the server. Since some save data is also
+		embedded into the items list, the index will be ignored for them specifically.
+		The rest of the items are separated into queues and processed simultaneously.
+		"""
 		# Wait until the game is online and the client is not having issues before processing the items.
 		while self.should_not_be_running_context() or self.in_error:
 			await asyncio.sleep(0.5)
@@ -332,7 +327,7 @@ class ContextISC(CommonContext):
 				self.all_received_items = []
 				for network_item in network_items_list:
 					self.all_received_items.append(network_item.item)
-				await self.write_last_item_list()
+				await self.save_new_local_data()
 				return
 			# Otherwise, business as usual.
 			newly_received_items = network_items_list[local_list_length:]
@@ -522,7 +517,7 @@ class ContextISC(CommonContext):
 	#
 	# Update locations checked
 	#
-	def location_table_check(self, given_location) -> bool:
+	def location_table_check(self, given_location: str) -> bool:
 		"""
 		Checks if:
 		- This location exists in the location table or not.
@@ -531,8 +526,9 @@ class ContextISC(CommonContext):
 		If any of that fails, immediately return False.
 		"""
 		if given_location not in location_table: return False
-		if given_location not in self.all_location_ids: return False
-		if given_location not in self.locations_checked: return False
+		if location_table[given_location] not in self.all_location_ids: return False
+		if location_table[given_location] in self.previous_location_checked: return False
+
 		return True
 
 	async def update_locations_checked(self, ignore_prohibition: bool = False):
@@ -551,17 +547,19 @@ class ContextISC(CommonContext):
 					used_day_id: int = day_id + 1
 					used_scene_id: int = scene_id + 1
 
-					if self.handler.get_scene_generic_clear((used_day_id, used_scene_id)):
+					if self.handler.get_scene_generic_clear(used_day_id, used_scene_id):
 						generic_location_name = get_location_name_scene(used_day_id, used_scene_id)
 						if self.location_table_check(generic_location_name):
 							new_locations.append(location_table[generic_location_name])
-					if not self.options["include_item_clears"]: continue
 					for item_id in range(10):
-						if self.handler.get_scene_item_clear((used_day_id, used_scene_id), item_id):
+						if self.handler.get_scene_item_clear(used_day_id, used_scene_id, item_id):
 							item_location_name = get_location_name_scene_with_item(used_day_id, used_scene_id,
 																					   item_id)
-							if not self.location_table_check(item_location_name): continue
+							if not self.location_table_check(item_location_name) and self.options["include_item_clears"]: continue
 							new_locations.append(location_table[item_location_name])
+
+			if ignore_prohibition or not self.has_saved_data_internally:
+				await self.update_event_save_data(ignore_prohibition)
 
 		# Nicknames
 		for i in range(CONST_TOTAL_NICKNAME_COUNT):
@@ -590,16 +588,25 @@ class ContextISC(CommonContext):
 			self.finished_game = True
 			await self.send_msgs([{"cmd": 'StatusUpdate', "status": 30}])
 
-	async def update_event_save_data(self):
+	async def update_event_save_data(self, ignore_restriction: bool = False):
 		"""
 		Intended to be called exclusively while the game is paused and in a stage.
 		May be called if a Scene Skip was used.
 		"""
-		def is_scene_not_internally_checked(day_scene_tuple: tuple[int, int], item_id: int) -> bool:
-			if self.retrieve_save_data_ab(day_scene_tuple, item_id): return False
-			if not self.handler.get_scene_item_clear(day_scene_tuple, item_id): return False
+		def is_scene_not_internally_checked(day_scene_tuple: tuple[int, int], chosen_item_id: int) -> bool:
+			# Checks if the clear was already internally logged. If it was, return False.
+			if self.retrieve_save_data_ab(day_scene_tuple, chosen_item_id): return False
+			# If it was not, check if the clear is present in-game. If not, return False.
+			if not self.handler.get_scene_item_clear(
+					day_num=day_scene_tuple[0],
+					scene_num=day_scene_tuple[1],
+					item_id=chosen_item_id
+			): return False
+			# Otherwise, return True.
 			return True
 
+		if self.has_saved_data_internally and not ignore_restriction: return
+		self.has_saved_data_internally = True
 		has_updated_event_save: bool = False
 
 		for day_id in range(10):
@@ -616,6 +623,7 @@ class ContextISC(CommonContext):
 
 		if not has_updated_event_save: return
 		await self.write_event_save_data_ab()
+		return
 
 	def update_check_save_data_ab(self, day_scene_tuple: tuple[int, int] = (1, 1), item_id: int = 0):
 		old_data_tuple: tuple[int, int] = (self.save_data_a, self.save_data_b)
@@ -687,17 +695,19 @@ class ContextISC(CommonContext):
 		self.handler.set_default_item_data()
 		self.clear_save_data_scene()
 		self.clear_save_data_other()
+		self.logger_debug("Cleared pre-existing save data in-game.")
 		return
 
 	def clear_save_data_scene(self):
 		for day_id in range(10):
 			for scene_id in range(CONST_DAY_SCENE_COUNT[day_id]):
-				day_scene_tuple: tuple[int, int] = (day_id + 1, scene_id + 1)
+				day_num = day_id + 1
+				scene_num = scene_id + 1
 
-				self.handler.set_scene_generic_clear(day_scene_tuple, False)
+				self.handler.set_scene_generic_clear(day_num, scene_num, False)
 				for item_id in range(10):
 					self.handler.set_scene_item_clear(
-						day_scene_tuple,
+						day_num, scene_num,
 						item_id,
 						False
 					)
@@ -712,7 +722,9 @@ class ContextISC(CommonContext):
 		return
 
 	async def load_save_data(self):
-		while self.should_not_be_running_context():
+		self.logger_debug("Attempting to load previous data...")
+
+		while self.should_not_be_running_context() or self.is_game_in_stage:
 			await asyncio.sleep(0.5)
 
 		while self.handler.get_music_check(0):
@@ -722,12 +734,19 @@ class ContextISC(CommonContext):
 		# Item Equip data is loaded when items from the AP server is received.
 		# Not here.
 
-		self.load_save_data_scene_generic()
-		self.load_save_data_scene_items()
-		self.load_save_data_other()
-		self.handler.options = self.options
-
-		return
+		try:
+			self.load_save_data_scene_generic()
+			self.load_save_data_scene_items()
+			self.load_save_data_other()
+			self.handler.options = self.options
+			self.logger_debug("Loaded previous save data.")
+			self.completed_loading_save_data = True
+		except Exception as e:
+			self.logger_debug(
+				is_error=True,
+				debug_msg="Error loading save data:\n" + traceback.format_exc()
+			)
+			self.in_error = True
 
 	def load_save_data_scene_generic(self):
 		# Go through Locations list.
@@ -737,16 +756,16 @@ class ContextISC(CommonContext):
 					day_number=day_id + 1,
 					scene_number=scene_id + 1
 				)
-				if not location_table[generic_clear_location_name] in self.locations_checked: continue
+				if not location_table[generic_clear_location_name] in self.previous_location_checked: continue
 				self.handler.set_scene_generic_clear(
-					day_and_scene_id=(day_id + 1, scene_id + 1),
-					value=True
+					day_id + 1, scene_id + 1, True
 				)
 
 		return
 
 	def load_save_data_scene_items(self):
 		# Rely on internal data.
+		# TODO: Actually read from json file THEN check it here.
 		for day_id in range(10):
 			for scene_id in range(CONST_DAY_SCENE_COUNT[day_id]):
 				for item_id in range(10):
@@ -756,9 +775,7 @@ class ContextISC(CommonContext):
 						item_id=item_id
 					):
 						self.handler.set_scene_item_clear(
-							day_and_scene_id=(day_id + 1, scene_id + 1),
-							item_id=item_id,
-							value=True
+							day_id + 1, scene_id + 1, item_id, True
 						)
 
 		return
@@ -769,12 +786,12 @@ class ContextISC(CommonContext):
 			if not self.options["include_hidden_nicknames"] and nickname_id >= (CONST_TOTAL_NICKNAME_COUNT - 10):
 				continue
 			nickname_location_name: str = get_location_name_nickname(nickname_id + 1)
-			if not location_table[nickname_location_name] in self.locations_checked: continue
+			if not location_table[nickname_location_name] in self.previous_location_checked: continue
 			self.handler.set_nickname_check(nickname_id, True)
 
 		for music_id in range(9):
 			music_location_name: str = get_location_name_music_room(music_id + 1)
-			if not location_table[music_location_name] in self.locations_checked: continue
+			if not location_table[music_location_name] in self.previous_location_checked: continue
 			self.handler.set_music_check(music_id, True)
 
 		return
@@ -794,6 +811,7 @@ class ContextISC(CommonContext):
 		"""
 		self.logger_debug("Going from scene to menu...")
 		self.can_check_clear_locations = False
+		self.has_saved_data_internally = False
 
 	# TODO
 	# Stage Reset
@@ -837,12 +855,16 @@ class ContextISC(CommonContext):
 				if JSON_SLOT_CLEARS_B in saved_data_dict:
 					self.save_data_b = saved_data_dict[JSON_SLOT_CLEARS_B]
 				if JSON_SLOT_PLAYTIME in saved_data_dict:
-					self.save_playtime = saved_data_dict[JSON_SLOT_PLAYTIME]
+					if saved_data_dict[JSON_SLOT_PLAYTIME] > self.save_playtime:
+						self.save_playtime = saved_data_dict[JSON_SLOT_PLAYTIME]
 				if JSON_SLOT_DEATHS in saved_data_dict:
-					self.save_deaths = saved_data_dict[JSON_SLOT_DEATHS]
+					if saved_data_dict[JSON_SLOT_DEATHS] > self.save_playtime:
+						self.save_deaths = saved_data_dict[JSON_SLOT_PLAYTIME]
 				if JSON_SLOT_SCENE_SKIP in saved_data_dict:
-					self.save_skips_used = saved_data_dict[JSON_SLOT_SCENE_SKIP]
+					if saved_data_dict[JSON_SLOT_SCENE_SKIP] > self.save_playtime:
+						self.save_skips_used = saved_data_dict[JSON_SLOT_SCENE_SKIP]
 
+		self.logger_debug("Loaded initial local data.")
 		self.loaded_past_received_items = True
 		return
 
@@ -858,13 +880,16 @@ class ContextISC(CommonContext):
 
 		self.all_received_items += item_id_list
 
-		await self.write_last_item_list()
+		self.logger_debug("Adding received item to local item list...")
 
-	async def write_last_item_list(self):
-		# Writes the last received item index to a .json file named "th185ap".
+		await self.save_new_local_data()
+
+	async def save_new_local_data(self):
 		# Initial check to make sure the client has not reset itself.
 		if not self.is_connected and not self.in_error: return
 		if len(self.all_received_items) <= 0: return
+
+		self.logger_debug("Saving new local data...")
 
 		json_file_name = get_item_index_save_name(self.seed_name, self.team, self.slot)
 		full_file_path = os.path.join(user_path(CLIENT_DATA_PATH), os.path.basename(json_file_name))
@@ -872,11 +897,11 @@ class ContextISC(CommonContext):
 		full_dict = {
 			JSON_SLOT_NAME: self.player_names[self.slot],
 			JSON_SLOT_ITEMS: self.all_received_items,
-			JSON_SLOT_CLEARS_A: self.save_data_a,
-			JSON_SLOT_CLEARS_B: self.save_data_b,
-			JSON_SLOT_PLAYTIME: self.save_playtime,
-			JSON_SLOT_DEATHS: self.save_deaths,
-			JSON_SLOT_SCENE_SKIP: self.save_skips_used
+			JSON_SLOT_CLEARS_A: self.save_data_a or 0x0,
+			JSON_SLOT_CLEARS_B: self.save_data_b or 0x0,
+			JSON_SLOT_PLAYTIME: self.save_playtime or 0,
+			JSON_SLOT_DEATHS: self.save_deaths or 0,
+			JSON_SLOT_SCENE_SKIP: self.save_skips_used or 0
 		}
 
 		client_directory_get_or_default()
@@ -934,8 +959,9 @@ class ContextISC(CommonContext):
 		"""
 		try:
 			while self.should_run_loop():
-				if self.completed_loading_save_data: await self.update_locations_checked()
-				self.handler.execute_notice()
+				if self.completed_loading_save_data:
+					await self.update_locations_checked()
+					self.handler.execute_notice()
 				await asyncio.sleep(0.5)
 		except Exception as e:
 			self.in_error = True
@@ -959,6 +985,7 @@ class ContextISC(CommonContext):
 					self.is_game_in_stage = False
 				if not self.is_game_in_menu:
 					self.is_game_in_menu = True
+					await self.update_locations_checked(True)
 					await self.transfer_from_stage_to_menu()
 		except Exception as e:
 			self.in_error = True
@@ -985,14 +1012,16 @@ class ContextISC(CommonContext):
 
 				if not self.can_check_clear_locations and self.handler.is_game_paused():
 					self.can_check_clear_locations = True
+					self.logger_debug("Game is allowed to check for scene clears.")
 				if self.can_check_clear_locations and not self.handler.is_game_paused():
 					self.can_check_clear_locations = False
 
 				# If a scene was just freshly restarted/had just begun.
 				if not self.begin_new_scene and self.handler.is_stage_reset():
 					self.begin_new_scene = True
-					self.handler.toggle_next_scene_button(True)
-					self.handler.toggle_saving_replays(True)
+					self.handler.toggle_next_scene_button()
+					self.handler.toggle_saving_replays()
+					self.has_saved_data_internally = False
 					self.logger_debug("Scene has been restarted.")
 				if self.begin_new_scene and not self.handler.is_stage_reset():
 					self.begin_new_scene = False
@@ -1071,8 +1100,7 @@ async def game_watcher_async(ctx: ContextISC):
 			ctx.in_error = False
 
 			if not ctx.is_game_running:
-				ctx.is_game_running = ctx.handler.gameController.check_if_in_game()
-				logger.info(f"Is the game running? {ctx.is_game_running}")
+				ctx.is_game_running = ctx.handler.is_game_running()
 				await asyncio.sleep(1)
 				continue
 
@@ -1090,12 +1118,11 @@ async def game_watcher_async(ctx: ContextISC):
 				continue
 
 			# Start the different loops.
-			loops = [
-				asyncio.create_task(ctx.main_loop()),
-				asyncio.create_task(ctx.menu_loop()),
-				asyncio.create_task(ctx.game_loop()),
-				asyncio.create_task(ctx.trap_loop())
-			]
+			loops = []
+			loops.append(asyncio.create_task(ctx.main_loop()))
+			loops.append(asyncio.create_task(ctx.menu_loop()))
+			loops.append(asyncio.create_task(ctx.game_loop()))
+			loops.append(asyncio.create_task(ctx.trap_loop()))
 			if ctx.deathlink_enabled:
 				loops.append(asyncio.create_task(ctx.deathlink_loop()))
 
