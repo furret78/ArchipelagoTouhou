@@ -17,7 +17,6 @@ def read_bit(bitarray: int = 0, index: int = 0) -> bool:
 	Index cannot go higher than 511 (512 bits).
 	"""
 	if index > 511: return False
-	print(f"Read bitarray: {str(bitarray)}")
 	return (bitarray & 1 << index) != 0
 
 def write_bit(bitarray: int = 0, index: int = 0, value: bool = False) -> int:
@@ -31,7 +30,6 @@ def write_bit(bitarray: int = 0, index: int = 0, value: bool = False) -> int:
 		new_bitarray |= 1 << index
 	else:
 		new_bitarray &= ~(1 << index)
-	print(f"Post-modification: {str(new_bitarray)}")
 	return new_bitarray
 
 def write_bit_savedata(data_int: int = 0, index: int = 0, value: bool = False) -> int:
@@ -47,7 +45,7 @@ def read_bit_savedata(data_int: int = 0, index: int = 0) -> bool:
 	return read_bit(data_int, index)
 
 def should_be_save_b(absolute_scene_id: int = 0) -> bool:
-	return absolute_scene_id > 49
+	return absolute_scene_id > 37
 
 def get_scene_clear_neutral(save_data_ab: tuple[int, int], day_scene_id: tuple[int, int] = (1, 1), item_id: int = 0) -> bool:
 	if not isinstance(save_data_ab[0], int) or not isinstance(save_data_ab[1], int):
@@ -70,12 +68,13 @@ def set_scene_clear_neutral(save_data_ab: tuple[int, int], day_scene_id: tuple[i
 		return new_save_data, save_data_ab[1]
 
 def get_bit_index_used(absolute_scene_id: int, item_id: int) -> int:
+	# Absolute Scene ID passed in ideally should start from 0 and goes up to 74.
 	clean_item_id: int = clamp(item_id, 0, 9)
 	bit_position: int = (absolute_scene_id * 10) + clean_item_id
 	if should_be_save_b(absolute_scene_id):
-		bit_position = clamp(bit_position - 510, 0, 511)
+		bit_position = clamp(bit_position - (38 * 10), 0, 511)
 	else:
-		bit_position = clamp(bit_position - 10, 0, 511)
+		bit_position = clamp(bit_position, 0, 511)
 
 	return bit_position
 

@@ -1,5 +1,9 @@
+import logging
+
 import pymem
 import pymem.exception
+import ctypes
+from pymem.ressources.kernel32 import VirtualProtectEx
 
 from ..utils.utils_math import get_pointer_address, clamp
 from ..variables.asm_code_address import *
@@ -7,7 +11,6 @@ from ..variables.game_data_address import *
 from ..variables.game_info import FILE_NAME
 from ..variables.game_save_address import *
 from ..variables.game_stat_info import CONST_PLAYTIME_REQUIRE
-
 
 class GameController:
 	"""
@@ -24,6 +27,60 @@ class GameController:
 		self.ptrPlayer = self.pm.base_address + ADDR_BASE_PLAYER_POINTER
 		self.ptrPauseMenu = self.pm.base_address + ADDR_BASE_PAUSE_MENU
 		self.ptrGameTick = self.pm.base_address + ADDR_BASE_GAME_TICK
+
+	#
+	# Helper to change memory protection for specific memory regions.
+	#
+	# Lobbed this off of Nicholas Brochu from the Peggle Nights AP.
+	def change_and_write_to_protected_memory(self, address: int, new_value, bytes_length: int):
+		previous_protection: ctypes.c_ulong = ctypes.c_ulong(0)
+
+		did_change_protection: bool = bool(
+			VirtualProtectEx(
+				self.pm.process_handle,
+				ctypes.c_void_p(address),
+				bytes_length,
+				0x40, # This is PAGE_EXECUTE_READWRITE.
+				ctypes.byref(previous_protection),
+			)
+		)
+
+		if not did_change_protection:
+			logging.info(f"Failed to change memory protection for address {address}. Could not write {str(new_value)} to said address.")
+			return
+
+		if isinstance(new_value, int):
+			self.pm.write_int(address=address, value=new_value)
+		elif isinstance(new_value, bytes):
+			self.pm.write_bytes(address=address, value=new_value, length=bytes_length)
+
+		VirtualProtectEx(
+			self.pm.process_handle,
+			ctypes.c_void_p(address),
+			bytes_length,
+			previous_protection.value,
+			ctypes.byref(previous_protection),
+		)
+
+		return
+
+	def set_protected_int_memory(self, address, value: int):
+		self.change_and_write_to_protected_memory(
+			address=address,
+			new_value=value,
+			bytes_length=4
+		)
+
+	def set_protected_str_memory(self, address, str_value: str):
+		"""
+		Must be ASCII string. Each character in the string is 1 byte.
+		"""
+		str_list_bytes = list(str_value.encode('ascii'))
+		self.change_and_write_to_protected_memory(
+			address=address,
+			new_value=bytes(str_list_bytes),
+			bytes_length=len(str_list_bytes)
+		)
 
 	#
 	# Fundamental helper functions
@@ -103,6 +160,17 @@ class GameController:
 	# Overwriting specific parts of game code right as it boots up.
 	# Initial Assembly hacks to make the AP function more independently.
 	def init_game_asm_hacks(self):
+		self.init_change_file_names()
+		self.set_subitem_slot_unlock(False)
+		self.bypass_fresh_save_lock()
+		self.disable_vanilla_item_behavior()
+		self.disable_vanilla_menu_behavior()
+		self.disable_stage_specific_behavior()
+
+		previous_playtime = self.get_address_scorefile_base(OFFSET_PLAYTIME_HIGH)
+		self.pm.write_int(previous_playtime, 0)
+
+	def disable_vanilla_item_behavior(self):
 		# Disable forced item upgrades.
 		for static_addr in ADDR_STATIC_ITEM_UPGRADES:
 			self.pm.write_bytes(self.pm.base_address + static_addr, bytes([0xEB]), 1)
@@ -114,7 +182,11 @@ class GameController:
 			self.pm.write_bytes(self.pm.base_address + offset_3byte, bytes([0x90, 0x90, 0x90]), 3)
 		# Disable forced max level caps. That can be set later.
 		for max_level_offset in ADDR_STATIC_MAX_LEVEL:
-			self.pm.write_bytes(self.pm.base_address + max_level_offset, bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]), 7)
+			self.pm.write_bytes(self.pm.base_address + max_level_offset,
+								bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]), 7)
+		return
+
+	def disable_vanilla_menu_behavior(self):
 		# Disable cheat code
 		for i in range(19):
 			self.pm.write_bytes(self.pm.base_address + ADDR_STATIC_CHEAT_CODE + i, bytes([0x90]), 1)
@@ -134,22 +206,6 @@ class GameController:
 			for offset in ADDR_STATIC_SCENE_ONE[k]:
 				for j in range(byte_length):
 					self.pm.write_bytes(self.pm.base_address + offset + j, bytes([0x90]), 1)
-		# Disable forcing item equips during certain scenes.
-		for force_item_offset in ADDR_STATIC_FORCE_ITEM:
-			self.pm.write_bytes(
-				address=self.pm.base_address + force_item_offset,
-				value=bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]),
-				length=10
-			)
-		# Disable forcing sub-item unlock during 6-1.
-		self.pm.write_bytes(
-			address=self.pm.base_address + ADDR_STATIC_FORCE_SUBITEM,
-			value=bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]),
-			length=7
-		)
-
-		# TODO: Changing string names is shelved for now until I figure out how to bypass write protections.
-
 		# Override default scene locks
 		for offset in ADDR_STATIC_SCENE_LOCKS:
 			self.pm.write_bytes(
@@ -163,11 +219,44 @@ class GameController:
 				value=bytes([0x90]),
 				length=1
 			)
+		return
 
-		previous_playtime = self.get_address_scorefile_base(OFFSET_PLAYTIME_HIGH)
-		self.pm.write_int(previous_playtime, 0)
+	def disable_stage_specific_behavior(self):
+		# Disable forcing item equips during certain scenes.
+		for force_item_offset in ADDR_STATIC_FORCE_ITEM:
+			self.pm.write_bytes(
+				address=self.pm.base_address + force_item_offset,
+				value=bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]),
+				length=10
+			)
+		# Disable forcing sub-item unlock during 6-1.
+		self.pm.write_bytes(
+			address=self.pm.base_address + ADDR_STATIC_FORCE_SUBITEM,
+			value=bytes([0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]),
+			length=7
+		)
+		return
 
-		self.bypass_fresh_save_lock()
+	def init_change_file_names(self):
+		# Change various folder names
+		# BestShot folder change to sc_143ap
+		for offset in ADDR_STATIC_BESTSHOT_NAME:
+			self.set_protected_str_memory(
+				address=self.pm.base_address + offset,
+				str_value="sc_143ap"
+			)
+		# Replay folder to rep_ap
+		for offset in ADDR_STATIC_REPLAY_NAME:
+			self.set_protected_str_memory(
+				address=self.pm.base_address + offset,
+				str_value="rep_ap"
+			)
+		# Scorefile name to scoreap143.dat
+		# This just changes "th" to "ap"
+		self.set_protected_str_memory(
+			address=self.pm.base_address + ADDR_STATIC_SCOREFILE_NAME,
+			str_value="ap"
+		)
 
 	def init_game_asm_playtime(self, playtime_mult: int):
 		playtime_req_list = CONST_PLAYTIME_REQUIRE[clamp(playtime_mult, 0, 2)]
@@ -178,10 +267,14 @@ class GameController:
 				length=3
 			)
 
+	def get_day_scene_count(self, day_id: int):
+		safe_day_id: int = clamp(day_id, 0, 9)
+		return self.pm.read_int(self.pm.base_address + ADDR_STATIC_START_SCENE_COUNT + (safe_day_id * 4))
+
 	def set_day_scene_count(self, day_id: int, scene_count: int):
 		safe_day_id: int = clamp(day_id, 0, 9)
 		safe_scene_count: int = clamp(scene_count, 0, 10)
-		self.pm.write_int(
+		self.set_protected_int_memory(
 			address=self.pm.base_address + ADDR_STATIC_START_SCENE_COUNT + (safe_day_id * 4),
 			value=safe_scene_count
 		)
@@ -424,7 +517,7 @@ class GameController:
 
 	def set_item_max_level(self, item_id: int, level_num: int):
 		addrMaxLevel = self.get_address_scorefile_base(get_item_level_offset(item_id, True))
-		self.pm.write_int(addrMaxLevel, level_num)
+		self.set_protected_int_memory(address=addrMaxLevel, value=level_num)
 
 	#
 	# Sub-items

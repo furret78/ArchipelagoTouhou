@@ -72,9 +72,32 @@ class CommandProccessorISC(ClientCommandProcessor):
 		if force_override != "yes":
 			logger.info(f"Scene Skips used: {scene_skip_used}/{scene_skip_count}.")
 			return
+		if scene_skip_used >= scene_skip_count:
+			logger.info(f"Not enough available Scene Skip items. Scene Skips already used: {scene_skip_used}/{scene_skip_count}.")
+			return
 
 		clean_day_id = clamp(int(day_number), 1, 10)
 		clean_scene_id = clamp(int(scene_number), 1, CONST_DAY_SCENE_COUNT[clean_day_id - 1])
+		scene_num_unlocked = self.ctx.handler.scenes_unlocked[clean_day_id - 1]
+
+		if clean_scene_id > scene_num_unlocked:
+			logger.info(f"Scene {str(clean_day_id)}-{str(clean_scene_id)} hasn't been unlocked yet. Cannot be skipped.")
+			return
+		if self.ctx.handler.get_scene_all_clear(clean_day_id, clean_scene_id):
+			logger.info(f"Scene {str(clean_day_id)}-{str(clean_scene_id)} had already been fully cleared. Cannot be skipped.")
+			return
 
 		asyncio.create_task(self.scene_skip_cmd(clean_day_id, clean_scene_id))
+		self.ctx.save_skips_used += 1
+		asyncio.create_task(self.ctx.write_scene_skip_to_server())
+		asyncio.create_task(self.ctx.save_new_local_data())
 		return
+
+	def _cmd_toggle_debug(self):
+		"""
+		Toggles whether debug messages should be shown or not.
+		Will always default to False upon startup.
+		Not recommended for normal gameplay.
+		"""
+		self.ctx.debug_messages_enabled = not self.ctx.debug_messages_enabled
+		logger.info(f"Debug message showing has been updated to: {self.ctx.debug_messages_enabled}.")

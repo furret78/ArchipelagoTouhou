@@ -37,6 +37,7 @@ CONST_TOTAL_ITEM_COUNT = len(CONST_ITEM_SHORT_TO_ID.keys())
 CONST_ITEMCODE_TREASURE = item_table[CONST_TREASURE_ITEM_NAMES[0]].code
 CONST_ITEMCODE_DAYPROGRESS = item_table[CONST_PROGRESSIVE_DAY].code
 CONST_ITEMCODE_SUBSLOT = item_table[CONST_SUBITEM_SLOT_NAME].code
+CONST_ITEMCODE_SCENESKIP = item_table[CONST_SCENE_SKIP_NAME].code
 
 class ContextISC(CommonContext):
 	"""Touhou 14.3 Game Context"""
@@ -62,7 +63,6 @@ class ContextISC(CommonContext):
 		self.retrieved_custom_data: bool = False
 		self.loaded_past_received_items: bool = False
 		self.all_received_items = None
-		self.client_settings = {}
 
 		# Scene Clear data is split into 2 integers, modified with bit-shifting.
 		# DataStorage only allows up to 512 bits/64 bytes per integer.
@@ -101,6 +101,9 @@ class ContextISC(CommonContext):
 		self.begin_new_scene: bool = False
 		self.has_saved_data_internally: bool = False
 
+		# Client settings
+		self.debug_messages_enabled: bool = False
+
 		self.reset_context()
 
 	def reset_context(self):
@@ -132,6 +135,8 @@ class ContextISC(CommonContext):
 		self.can_check_clear_locations = False
 		self.begin_new_scene = False
 		self.has_saved_data_internally = False
+
+		self.debug_messages_enabled = False
 
 		return
 
@@ -167,7 +172,6 @@ class ContextISC(CommonContext):
 			asyncio.create_task(self.send_msgs([{"cmd": "GetDataPackage", "games": [DISPLAY_NAME]}]))
 
 		if cmd == "ReceivedItems":
-			pass
 			asyncio.create_task(
 				self.handle_received_items(network_index=args["index"],
 										   network_items_list=args["items"])
@@ -266,12 +270,13 @@ class ContextISC(CommonContext):
 				await asyncio.sleep(2)
 
 	def logger_debug(self, debug_msg: str = "", is_error: bool = False):
+		# If it's an error, ignore whether debug messages should appear or not and show it anyways.
 		if is_error:
 			logger.error(debug_msg)
 			return
-
+		# Otherwise, check that.
+		if not self.debug_messages_enabled: return
 		logger.info(debug_msg)
-		return
 
 	#
 	# Function that checks if the main bulk of the client should be running or not.
@@ -288,7 +293,7 @@ class ContextISC(CommonContext):
 		await self.send_msgs([{"cmd": "SetNotify", "keys": self.custom_data_keys_list}])
 
 	def get_total_scene_skip_count(self) -> int:
-		return self.all_received_items.count(CONST_SCENE_SKIP_NAME)
+		return self.all_received_items.count(CONST_ITEMCODE_SCENESKIP)
 
 	# TODO
 	# Handle incoming items
@@ -303,13 +308,9 @@ class ContextISC(CommonContext):
 		while self.should_not_be_running_context() or self.in_error:
 			await asyncio.sleep(0.5)
 
-		network_item_in_id: list[int] = []
-		for network_item in network_items_list:
-			network_item_in_id.append(network_item.item)
-
 		# Python slicing will exclude the index of the start point if it's a positive integer.
 		# Before actually processing it, wait until the client has loaded the local list of received items.
-		while not self.loaded_past_received_items or self.last_received_item_index_server <= -1:
+		while not self.loaded_past_received_items:
 			await asyncio.sleep(0.5)
 
 		local_list_length = len(self.all_received_items)
@@ -334,7 +335,8 @@ class ContextISC(CommonContext):
 		# If the index is not 0, check for the most common case first.
 		else:
 			# If the index is the same as the local list's length, process that as per usual.
-			if network_index == local_list_length: newly_received_items = network_items_list
+			if network_index == local_list_length:
+				newly_received_items = network_items_list
 			# If the index is different, request a Sync.
 			else:
 				self.logger_debug(f"Received index {str(network_index)} does not match what the client expected {str(local_list_length)}.")
@@ -454,7 +456,7 @@ class ContextISC(CommonContext):
 		"""
 		def notice_if_level_zero(item_id_received: int):
 			current_item_level: int = self.handler.item_stats[item_id_received]["level"]
-			if current_item_level == 1: self.handler.add_notice_item(item_id_received, 0)
+			if current_item_level == 0: self.handler.add_notice_item(item_id_received, 0)
 
 		# TODO: Add branch for Max+ and custom upgrades.
 		if len(item_count) <= 0 and len(item_stat) <= 0: return
@@ -537,6 +539,7 @@ class ContextISC(CommonContext):
 		If there is, send a message and update the checked location list.
 		"""
 		if self.is_loading_data_setup or not self.completed_loading_save_data: return
+		self.handler.check_illogical_nicknames()
 
 		new_locations = []
 
@@ -804,6 +807,7 @@ class ContextISC(CommonContext):
 		Handles transferring from the game menu to stage.
 		"""
 		self.logger_debug("Going from menu to scene...")
+		self.handler.correct_sub_item()
 
 	async def transfer_from_stage_to_menu(self):
 		"""
@@ -812,6 +816,9 @@ class ContextISC(CommonContext):
 		self.logger_debug("Going from scene to menu...")
 		self.can_check_clear_locations = False
 		self.has_saved_data_internally = False
+		self.handler.correct_sub_item()
+		await self.write_playtime_to_server()
+		await self.write_death_stat_to_server()
 
 	# TODO
 	# Stage Reset
@@ -845,24 +852,25 @@ class ContextISC(CommonContext):
 
 		# Check if the file exists.
 		if os.path.exists(full_file_path):
-			with open(full_file_path) as json_file:
-				saved_data_dict: dict = orjson.loads(json_file.read())
-				# Check if the slot name matches and item list exists.
-				if JSON_SLOT_ITEMS in saved_data_dict:
-					self.all_received_items = saved_data_dict[JSON_SLOT_ITEMS]
-				if JSON_SLOT_CLEARS_A in saved_data_dict:
-					self.save_data_a = saved_data_dict[JSON_SLOT_CLEARS_A]
-				if JSON_SLOT_CLEARS_B in saved_data_dict:
-					self.save_data_b = saved_data_dict[JSON_SLOT_CLEARS_B]
-				if JSON_SLOT_PLAYTIME in saved_data_dict:
-					if saved_data_dict[JSON_SLOT_PLAYTIME] > self.save_playtime:
-						self.save_playtime = saved_data_dict[JSON_SLOT_PLAYTIME]
-				if JSON_SLOT_DEATHS in saved_data_dict:
-					if saved_data_dict[JSON_SLOT_DEATHS] > self.save_playtime:
-						self.save_deaths = saved_data_dict[JSON_SLOT_PLAYTIME]
-				if JSON_SLOT_SCENE_SKIP in saved_data_dict:
-					if saved_data_dict[JSON_SLOT_SCENE_SKIP] > self.save_playtime:
-						self.save_skips_used = saved_data_dict[JSON_SLOT_SCENE_SKIP]
+			if os.path.getsize(full_file_path) > 0:
+				with open(full_file_path) as json_file:
+					saved_data_dict: dict = orjson.loads(json_file.read())
+					# Check if the slot name matches and item list exists.
+					if JSON_SLOT_ITEMS in saved_data_dict:
+						self.all_received_items = saved_data_dict[JSON_SLOT_ITEMS]
+					if JSON_SLOT_CLEARS_A in saved_data_dict:
+						self.save_data_a = int(saved_data_dict[JSON_SLOT_CLEARS_A])
+					if JSON_SLOT_CLEARS_B in saved_data_dict:
+						self.save_data_b = int(saved_data_dict[JSON_SLOT_CLEARS_B])
+					if JSON_SLOT_PLAYTIME in saved_data_dict:
+						if saved_data_dict[JSON_SLOT_PLAYTIME] > self.save_playtime:
+							self.save_playtime = saved_data_dict[JSON_SLOT_PLAYTIME]
+					if JSON_SLOT_DEATHS in saved_data_dict:
+						if saved_data_dict[JSON_SLOT_DEATHS] > self.save_playtime:
+							self.save_deaths = saved_data_dict[JSON_SLOT_PLAYTIME]
+					if JSON_SLOT_SCENE_SKIP in saved_data_dict:
+						if saved_data_dict[JSON_SLOT_SCENE_SKIP] > self.save_playtime:
+							self.save_skips_used = saved_data_dict[JSON_SLOT_SCENE_SKIP]
 
 		self.logger_debug("Loaded initial local data.")
 		self.loaded_past_received_items = True
@@ -894,14 +902,17 @@ class ContextISC(CommonContext):
 		json_file_name = get_item_index_save_name(self.seed_name, self.team, self.slot)
 		full_file_path = os.path.join(user_path(CLIENT_DATA_PATH), os.path.basename(json_file_name))
 
+		data_a_to_be_saved = self.save_data_a or 0x0
+		data_b_to_be_saved = self.save_data_b or 0x0
+
 		full_dict = {
 			JSON_SLOT_NAME: self.player_names[self.slot],
 			JSON_SLOT_ITEMS: self.all_received_items,
-			JSON_SLOT_CLEARS_A: self.save_data_a or 0x0,
-			JSON_SLOT_CLEARS_B: self.save_data_b or 0x0,
+			JSON_SLOT_CLEARS_A: str(data_a_to_be_saved),
+			JSON_SLOT_CLEARS_B: str(data_b_to_be_saved),
 			JSON_SLOT_PLAYTIME: self.save_playtime or 0,
 			JSON_SLOT_DEATHS: self.save_deaths or 0,
-			JSON_SLOT_SCENE_SKIP: self.save_skips_used or 0
+			JSON_SLOT_SCENE_SKIP: self.save_skips_used or 0,
 		}
 
 		client_directory_get_or_default()
@@ -985,6 +996,7 @@ class ContextISC(CommonContext):
 					self.is_game_in_stage = False
 				if not self.is_game_in_menu:
 					self.is_game_in_menu = True
+					self.handler.leave_stage_max_scene()
 					await self.update_locations_checked(True)
 					await self.transfer_from_stage_to_menu()
 		except Exception as e:
@@ -1012,15 +1024,17 @@ class ContextISC(CommonContext):
 
 				if not self.can_check_clear_locations and self.handler.is_game_paused():
 					self.can_check_clear_locations = True
+					self.handler.leave_stage_max_scene()
 					self.logger_debug("Game is allowed to check for scene clears.")
 				if self.can_check_clear_locations and not self.handler.is_game_paused():
+					self.handler.enter_stage_max_scene()
 					self.can_check_clear_locations = False
 
 				# If a scene was just freshly restarted/had just begun.
 				if not self.begin_new_scene and self.handler.is_stage_reset():
 					self.begin_new_scene = True
-					self.handler.toggle_next_scene_button()
 					self.handler.toggle_saving_replays()
+					self.handler.enter_stage_max_scene()
 					self.has_saved_data_internally = False
 					self.logger_debug("Scene has been restarted.")
 				if self.begin_new_scene and not self.handler.is_stage_reset():

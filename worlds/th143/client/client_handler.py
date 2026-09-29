@@ -1,3 +1,5 @@
+import logging
+
 from ..client.client_pymem import GameController
 from ..utils.utils_math import get_absolute_scene_id, clamp
 from ..variables.game_notice_id import CONST_NOTICE_ITEM_ID
@@ -291,6 +293,21 @@ class GameHandler:
 		self.gameController.set_scene_clear_item(absolute_scene_id, clean_item_id, final_value)
 
 	# Other Utils
+	def get_scene_all_clear(self, day_num: int = 1, scene_num: int = 1):
+		"""
+		Checks if a Scene has already had a full clear with all items by this point.
+		Includes itemless clears as well. Mainly used so as not to waste a Scene Skip item.
+		Returns False if there's still something not cleared yet.
+		"""
+		for item_clear in range(10):
+			if not self.get_scene_item_clear(
+				day_num=day_num,
+				scene_num=scene_num,
+				item_id=item_clear
+			): return False
+
+		return True
+
 	def do_scene_skip(self, day_num: int = 1, scene_num: int = 1):
 		self.set_scene_generic_clear(day_num, scene_num, True)
 		for item_id in range(11):
@@ -298,7 +315,7 @@ class GameHandler:
 
 	def toggle_next_scene_button(self, is_disabled: bool = False):
 		final_value: int = 0x41
-		if is_disabled: final_value = 0x00
+		if is_disabled: final_value = 0x90
 		self.gameController.toggle_next_scene_button(final_value)
 
 	def toggle_saving_replays(self, is_disabled: bool = False):
@@ -351,6 +368,49 @@ class GameHandler:
 
 	def get_treasure_condition(self) -> bool:
 		return self.treasure_count >= self.treasure_minimum
+
+	def enter_stage_max_scene(self):
+		"""
+		Function that should be run whenever the player unpauses/enters a scene/restarts a scene.
+
+		1. Read which Day and Scene was chosen.
+		2. Set that Day's Scene count to its max.
+		3. If the Scene is the last Scene according to the Handler, disable the Next Scene button.
+		   Otherwise, keep it enabled.
+		"""
+		day_chosen = self.gameController.get_last_day_chosen()
+		scene_chosen = self.gameController.get_last_scene_chosen() + 1
+
+		print(f"Last scene chosen {str(day_chosen + 1)}-{str(scene_chosen)}. Max scenes: {self.scenes_unlocked[day_chosen]}")
+
+		self.gameController.set_day_scene_count(day_chosen, CONST_DAY_SCENE_COUNT[day_chosen])
+
+		is_last_scene: bool = scene_chosen >= self.scenes_unlocked[day_chosen]
+		self.toggle_next_scene_button(is_last_scene)
+		if is_last_scene:
+			print(f"This is the last Scene of this Day.")
+
+	def leave_stage_max_scene(self):
+		"""
+		Function that should be run whenever the player pauses the game.
+
+		1. Read which Day was chosen.
+		2. Set that Day's Scene count to the number that the Handler has.
+		"""
+		day_chosen = self.gameController.get_last_day_chosen()
+		self.gameController.set_day_scene_count(day_chosen, self.scenes_unlocked[day_chosen])
+
+	def check_illogical_nicknames(self):
+		"""
+		Function that checks if some Nicknames may have been acquired illegally.
+		Mainly to do with the All-Scene Nicknames for each Day whose Scene counts are not yet at max.
+		"""
+		for day_id in range(10):
+			nick_id = day_id + 20
+			if self.get_nickname_check(nick_id) and self.scenes_unlocked[day_id] < CONST_DAY_SCENE_COUNT[day_id]:
+				self.set_nickname_check(day_id, False)
+
+		return
 
 	#
 	# Records Utils: Nicknames and Music Room
@@ -459,7 +519,7 @@ class GameHandler:
 					smallest=0,
 					largest=get_vanilla_level_max(item_id)
 				)
-				if clean_level_num < 0: continue
+				if clean_level_num <= 0: continue
 				self.gameController.set_item_level(item_id, clean_level_num)
 				self.gameController.set_item_use_count(item_id, CONST_ITEM_UPGRADE_STAT[item_id]["count"][clean_level_num - 1])
 				self.gameController.set_item_stat(item_id, CONST_ITEM_UPGRADE_STAT[item_id]["stat"][clean_level_num - 1])
@@ -507,4 +567,6 @@ class GameHandler:
 
 	def correct_sub_item(self):
 		current_chosen_sub = self.gameController.get_subitem_chosen()
-		if not self.subitems_unlocked[current_chosen_sub]: self.force_lock_subitem_individual()
+		if current_chosen_sub >= 9: return
+		if not self.subitems_unlocked[current_chosen_sub] or not self.subitem_slot_unlocked:
+			self.force_lock_subitem_individual()

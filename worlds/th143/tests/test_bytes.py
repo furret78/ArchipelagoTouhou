@@ -5,8 +5,7 @@ import pymem
 from BaseClasses import MultiWorld
 from ..utils.utils_math import get_absolute_scene_id
 from ..variables.asm_code_address import ADDR_STATIC_ITEM_UPGRADES, ADDR_STATIC_MALLET_SUB4, ADDR_STATIC_MALLET_SUB3, \
-    ADDR_STATIC_BESTSHOT_NAME, ADDR_STATIC_CHEAT_CODE, ADDR_STATIC_CHEAT_SOUND
-from ..variables.game_save_address import ADDR_BASE_SAVE_PTR, get_scene_clear_offset, get_item_clear_record_offset
+    ADDR_STATIC_BESTSHOT_NAME, ADDR_STATIC_CHEAT_CODE, ADDR_STATIC_CHEAT_SOUND, ADDR_STATIC_START_SCENE_COUNT
 
 
 def getPointerAddress(pm, base, offsets):
@@ -82,25 +81,3 @@ class ISCStatTest(unittest.TestCase):
         self.pm.write_int(addrItemLevel, cheat_item_level)
         self.pm.write_int(addrItemStat, cheat_item_unique_stat)
         self.pm.write_int(addrItemCount, cheat_item_use_count)
-
-    def test_get_scene_clear_generic(self):
-        self.pm = pymem.Pymem(process_name="th143.exe")
-        DAY_NUM = 1
-        SCENE_NUM = 2
-        ABSOLUTE_SCENE_ID = get_absolute_scene_id(DAY_NUM, SCENE_NUM)
-
-        addrScene = getPointerAddress(self.pm, self.pm.base_address + ADDR_BASE_SAVE_PTR, [get_scene_clear_offset(ABSOLUTE_SCENE_ID)])
-        print(f"Day {str(DAY_NUM)} Scene {str(SCENE_NUM)}, absolute ID {str(ABSOLUTE_SCENE_ID)}")
-        print(self.pm.read_int(addrScene))
-
-    def test_get_item_clear_record(self):
-        self.pm = pymem.Pymem(process_name="th143.exe")
-        DAY_NUM = 1
-        SCENE_NUM = 1
-        ABSOLUTE_SCENE_ID = get_absolute_scene_id(DAY_NUM, SCENE_NUM)
-        ITEM_ID = 1
-
-        addrScene = getPointerAddress(self.pm, self.pm.base_address + ADDR_BASE_SAVE_PTR,
-                                      [get_item_clear_record_offset(ABSOLUTE_SCENE_ID, ITEM_ID)])
-        print(f"Day {str(DAY_NUM)} Scene {str(SCENE_NUM)}, absolute ID {str(ABSOLUTE_SCENE_ID)}")
-        print(hex(self.pm.read_int(addrScene)))
