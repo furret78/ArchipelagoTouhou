@@ -1,4 +1,4 @@
-- fix cheat items not getting properly upgraded on second load
+- add filler items handling
 - check other types of generation settings as well (different vanilla settings, starting stages, etc.)
 - finish client
 - TODO: Patch mallet infinite plus stat exploit

@@ -271,7 +271,7 @@ class GameController:
 		safe_day_id: int = clamp(day_id, 0, 9)
 		return self.pm.read_int(self.pm.base_address + ADDR_STATIC_START_SCENE_COUNT + (safe_day_id * 4))
 
-	def set_day_scene_count(self, day_id: int, scene_count: int):
+	def set_day_scene_count(self, day_id: int = 0, scene_count: int = 0):
 		safe_day_id: int = clamp(day_id, 0, 9)
 		safe_scene_count: int = clamp(scene_count, 0, 10)
 		self.set_protected_int_memory(

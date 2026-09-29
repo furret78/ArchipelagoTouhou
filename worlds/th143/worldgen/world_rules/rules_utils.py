@@ -264,10 +264,7 @@ def rule_require_item_clears(item_id: int = 0, clear_count: int = 0):
 	Any ID but 9 also includes Itemless clears.
 	"""
 	item_id_used: int = clamp(item_id, 0, 8)
-	item_specific_clear_set = {
-		get_fake_clear_item_name(item_id_used), get_fake_clear_item_name(9)
-	}
-	return HasFromList(*item_specific_clear_set, count=clear_count)
+	return HasFromList(get_fake_clear_item_name(item_id_used), count=clear_count)
 
 def get_very_specific_scene_rules(day_id: int, scene_id: int):
 	"""

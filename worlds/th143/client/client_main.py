@@ -28,7 +28,7 @@ from ..client.client_cmd import CommandProccessorISC
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_MAX_PLAYTIME_CLIENT, CONST_MAX_DEATHS_CLIENT, \
 	CONST_MAX_SCENE_SKIPS, CONST_ITEM_UPGRADE_STAT
 from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID, CONST_PROGRESSIVE_DAY, \
-	CONST_SUBITEM_SLOT_NAME, CONST_SCENE_SKIP_NAME
+	CONST_SUBITEM_SLOT_NAME, CONST_SCENE_SKIP_NAME, CONST_ITEM_NAMES
 from ..worldgen.items import item_table
 from ..worldgen.world_locations.location_table import location_table
 
@@ -168,6 +168,7 @@ class ContextISC(CommonContext):
 
 			if self.handler is not None:
 				self.handler.reset()
+				self.handler.options = self.options
 
 			asyncio.create_task(self.send_msgs([{"cmd": "GetDataPackage", "games": [DISPLAY_NAME]}]))
 
@@ -255,6 +256,7 @@ class ContextISC(CommonContext):
 		while self.handler is None:
 			try:
 				self.handler = GameHandler()
+				self.handler.options = self.options
 			except Exception as e:
 				await asyncio.sleep(2)
 
@@ -432,21 +434,28 @@ class ContextISC(CommonContext):
 		Handles Cheat item statistics. This only handles levels.
 		"""
 		# TODO: Add branch for Max+ upgrades.
-		if len(item_level) <= 0: return
-		# Iterate over each entry in the list.
-		for received_item_id in item_level:
-			# Remove Level Cap items.
-			if received_item_id >= 21:
-				self.handler.item_stats[received_item_id - 20]["capped"] = False
-			# The actual item levels.
-			else:
-				used_item_id: int = received_item_id - 12
-				current_item_level: int = self.handler.item_stats[used_item_id]["level"]
-				self.handler.add_notice_item(
-					item_id=used_item_id,
-					upgrade_type=CONST_ITEM_UPGRADE_STAT[used_item_id]["notice"][current_item_level]
-				)
-				self.handler.item_stats[used_item_id]["level"] += 1
+		if len(item_level) > 0:
+			# Iterate over each entry in the list.
+			for received_item_id in item_level:
+				# Remove Level Cap items.
+				if received_item_id >= 21: self.handler.item_stats[received_item_id - 20]["capped"] = False
+				# The actual item levels.
+				else:
+					used_item_id: int = received_item_id - 12
+					current_item_level: int = self.handler.item_stats[used_item_id]["level"]
+					self.handler.add_notice_item(
+						item_id=used_item_id,
+						upgrade_type=CONST_ITEM_UPGRADE_STAT[used_item_id]["notice"][current_item_level]
+					)
+					self.handler.item_stats[used_item_id]["level"] += 1
+
+		self.logger_debug(
+			f"Cheat item levels:"
+		)
+		for i in range(9):
+			self.logger_debug(
+				f"{CONST_ITEM_NAMES[i]} Level: {self.handler.item_stats[i]["level"]}"
+			)
 
 		self.handler.update_cheat_items(True)
 
@@ -459,23 +468,25 @@ class ContextISC(CommonContext):
 			if current_item_level == 0: self.handler.add_notice_item(item_id_received, 0)
 
 		# TODO: Add branch for Max+ and custom upgrades.
-		if len(item_count) <= 0 and len(item_stat) <= 0: return
 		# Iterate over each entry in the list.
-		for received_item_id in item_count:
-			# Use Count upgrades
-			if 32 <= received_item_id <= 40:
-				used_item_id: int = received_item_id - 32
-				self.handler.add_notice_item(item_id=used_item_id, upgrade_type=1)
-				self.handler.item_stats[used_item_id]["level"] += 1
-				self.handler.item_stats[used_item_id]["count"] += 1
-				notice_if_level_zero(used_item_id)
-			# Unique Stat upgrades
-			elif 41 <= received_item_id <= 49:
-				used_item_id: int = received_item_id - 41
-				self.handler.add_notice_item(item_id=used_item_id, upgrade_type=2)
-				self.handler.item_stats[used_item_id]["level"] += 1
-				self.handler.item_stats[used_item_id]["stat"] += 1
-				notice_if_level_zero(used_item_id)
+		if len(item_count) > 0:
+			for received_item_id in item_count:
+				# Use Count upgrades
+				if 32 <= received_item_id <= 40:
+					used_item_id: int = received_item_id - 32
+					self.handler.add_notice_item(item_id=used_item_id, upgrade_type=1)
+					self.handler.item_stats[used_item_id]["level"] += 1
+					self.handler.item_stats[used_item_id]["count"] += 1
+					notice_if_level_zero(used_item_id)
+		if len(item_stat) > 0:
+			for received_item_id in item_stat:
+				# Unique Stat upgrades
+				if 41 <= received_item_id <= 49:
+					used_item_id: int = received_item_id - 41
+					self.handler.add_notice_item(item_id=used_item_id, upgrade_type=2)
+					self.handler.item_stats[used_item_id]["level"] += 1
+					self.handler.item_stats[used_item_id]["stat"] += 1
+					notice_if_level_zero(used_item_id)
 
 		self.handler.update_cheat_items(False)
 
@@ -561,6 +572,8 @@ class ContextISC(CommonContext):
 							if not self.location_table_check(item_location_name) and self.options["include_item_clears"]: continue
 							new_locations.append(location_table[item_location_name])
 
+			if self.handler.get_scene_generic_clear(1, 1):
+				self.handler.set_nickname_check(10, True)
 			if ignore_prohibition or not self.has_saved_data_internally:
 				await self.update_event_save_data(ignore_prohibition)
 
@@ -742,7 +755,7 @@ class ContextISC(CommonContext):
 			self.load_save_data_scene_items()
 			self.load_save_data_other()
 			self.handler.options = self.options
-			self.logger_debug("Loaded previous save data.")
+			logger.info("Finished game loading processes. You may now play.")
 			self.completed_loading_save_data = True
 		except Exception as e:
 			self.logger_debug(
@@ -816,7 +829,9 @@ class ContextISC(CommonContext):
 		self.logger_debug("Going from scene to menu...")
 		self.can_check_clear_locations = False
 		self.has_saved_data_internally = False
+		self.handler.set_music_check(0, True)
 		self.handler.correct_sub_item()
+		self.handler.update_cheat_items(not self.options["item_upgrade_separate"])
 		await self.write_playtime_to_server()
 		await self.write_death_stat_to_server()
 
@@ -824,7 +839,10 @@ class ContextISC(CommonContext):
 	# Stage Reset
 	#
 	async def stage_reset_async(self):
-		pass
+		self.handler.toggle_saving_replays()
+		self.handler.enter_stage_max_scene()
+		self.has_saved_data_internally = False
+		return
 
 	# TODO
 	# Last Received Item Index handling.
@@ -1033,9 +1051,7 @@ class ContextISC(CommonContext):
 				# If a scene was just freshly restarted/had just begun.
 				if not self.begin_new_scene and self.handler.is_stage_reset():
 					self.begin_new_scene = True
-					self.handler.toggle_saving_replays()
-					self.handler.enter_stage_max_scene()
-					self.has_saved_data_internally = False
+					await self.stage_reset_async()
 					self.logger_debug("Scene has been restarted.")
 				if self.begin_new_scene and not self.handler.is_stage_reset():
 					self.begin_new_scene = False
@@ -1118,8 +1134,8 @@ async def game_watcher_async(ctx: ContextISC):
 				await asyncio.sleep(1)
 				continue
 
-			if ctx.is_loading_data_setup:
-				logger.info(f"Found {SHORT_NAME} process!")
+			if ctx.is_loading_data_setup and not ctx.is_game_in_stage:
+				logger.info(f"Found {SHORT_NAME} process! Attempting hooking onto the game...")
 
 				# Set default Trap times
 				# Check if Death Link is enabled

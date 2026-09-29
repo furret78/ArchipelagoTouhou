@@ -4,7 +4,7 @@ from worlds.AutoWorld import World
 from .client.webworld import ISCWebWorld
 from .worldgen.world_options import options
 from .worldgen.world_options.options_classes import StartingDay, CompletionType
-from .utils.utils_get_name import get_scene_unlock_name
+from .utils.utils_get_name import get_scene_unlock_name, get_item_name_usage, get_item_name_stat, get_item_name_level
 from .utils.utils_math import clamp
 from .variables.game_info import DISPLAY_NAME, SHORT_NAME, CLIENT_DESCRIPTION
 from .variables.location_item_name import CONST_DAY_TO_ID, CONST_PROGRESSIVE_DAY, CONST_TREASURE_ITEM_NAMES
@@ -73,6 +73,7 @@ class ISCWorld(World):
 			self.options.include_itemless_logic.value = False
 		if self.options.item_upgrade_progress.value != 0:
 			self.options.item_upgrade_progress.value = 0
+		# TODO: Remove these things and work on their parts.
 
 		self.treasure_count_needed = 0
 		self.selected_random_starting_days = []
@@ -130,6 +131,16 @@ class ISCWorld(World):
 		if self.options.completion_type == CompletionType.option_gold_rush:
 			self.push_precollected(self.create_item(CONST_TREASURE_ITEM_NAMES[1]))
 
+		# If a Starting Cheat Item was chosen, push precollected that here.
+		# Remember to avoid generating more of it later.
+		if 0 <= self.options.starting_cheat_item < 9:
+			internal_item_id: int = self.options.starting_cheat_item.value
+			if self.options.item_upgrade_separate:
+				self.push_precollected(self.create_item(get_item_name_usage(internal_item_id)))
+				self.push_precollected(self.create_item(get_item_name_stat(internal_item_id)))
+			else:
+				self.push_precollected(self.create_item(get_item_name_level(internal_item_id)))
+
 		return
 
 	def create_regions(self):
@@ -165,6 +176,7 @@ class ISCWorld(World):
 			"starting_day": self.options.starting_day.value,
 			"starting_day_random_range": self.options.starting_day_random_range.value,
 			"valid_starting_days": self.options.valid_starting_days.value,
+			"starting_cheat_item": self.options.starting_cheat_item.value,
 			"item_upgrade_progress": self.options.item_upgrade_progress.value,
 			"item_upgrade_separate": self.options.item_upgrade_separate.value,
 			"item_upgrade_remove_cap": self.options.item_upgrade_remove_cap.value,

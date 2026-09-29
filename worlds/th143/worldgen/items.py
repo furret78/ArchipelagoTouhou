@@ -232,21 +232,26 @@ def create_all_items(world):
 	# Value is Level max.
 	item_level_amount: dict[str, int] = {}
 	# First value is Count max, second is Unique Stat max.
-	item_separate_amount: dict[str, tuple[int, int]] = {}
+	item_separate_amount: dict[str, list] = {}
 	for item_string_id in CONST_ITEM_SHORT_TO_ID.keys():
 		if item_string_id == "none": continue
 		int_item_id: int = CONST_ITEM_SHORT_TO_ID[item_string_id]
 
 		if world.options.item_upgrade_separate:
-			item_separate_amount[item_string_id] = (get_vanilla_count_max(int_item_id), get_vanilla_stat_max(int_item_id))
+			item_separate_amount[item_string_id] = [get_vanilla_count_max(int_item_id), get_vanilla_stat_max(int_item_id)]
+			if int_item_id == world.options.starting_cheat_item:
+				item_separate_amount[item_string_id][0] -= 1
+				item_separate_amount[item_string_id][1] -= 1
 		else:
 			item_level_amount[item_string_id] = get_vanilla_level_max(int_item_id)
+			if int_item_id == world.options.starting_cheat_item:
+				item_level_amount[item_string_id] -= 1
 
 	match world.options.item_upgrade_progress:
 		case 1: # Max+
 			if world.options.item_upgrade_separate:
 				for item_str in item_separate_amount.keys():
-					item_separate_amount[item_str] = (20, 20)
+					item_separate_amount[item_str] = [20, 20]
 			else:
 				for item_str in item_level_amount.keys():
 					item_level_amount[item_str] = 20

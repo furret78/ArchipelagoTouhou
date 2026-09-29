@@ -25,6 +25,7 @@ class ISCDataclass(PerGameCommonOptions):
 	starting_day_random_range: StartingDayRandomRange
 	valid_starting_days: ValidStartingDays
 	# Cheat Items
+	starting_cheat_item: StartingCheatItem
 	item_upgrade_progress: ItemUpgradeProgression
 	item_upgrade_separate: ItemUpgradeSeparate
 	item_upgrade_remove_cap: ItemUpgradeRemoveCap
@@ -70,6 +71,7 @@ option_groups = [
 	),
 	OptionGroup(
 		"Item Generation Options", [
+			StartingCheatItem,
 			ItemUpgradeProgression,
 			ItemUpgradeSeparate,
 			ItemUpgradeRemoveCap,

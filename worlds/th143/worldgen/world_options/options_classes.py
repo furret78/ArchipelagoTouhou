@@ -191,6 +191,35 @@ class ProgressiveScene(Choice):
 			return "Instant Scene Unlock"
 		return super().get_option_name(value)
 
+class StartingCheatItem(Choice):
+	"""
+	Which Items will be unlocked at Level 1 from the start.
+	If Item upgrades are separate, this will grant both a Count and Stat upgrade for the chosen item.
+	"""
+	display_name = "Starting Cheat Item"
+
+	option_fabric = 0
+	option_camera = 1
+	option_umbrella = 2
+	option_lantern = 3
+	option_yinyang = 4
+	option_bomb = 5
+	option_jizo = 6
+	option_doll = 7
+	option_mallet = 8
+	option_none = 9
+
+	default = option_fabric
+
+	@classmethod
+	def get_option_name(cls, value: T) -> str:
+		from ...variables.location_item_name import CONST_ITEM_NAMES
+		if 0 <= value < 9:
+			return CONST_ITEM_NAMES[value]
+		elif value == 9:
+			return "None"
+		return super().get_option_name(value)
+
 class StartingDay(Choice):
 	"""
 	Which Day to begin with.

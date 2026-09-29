@@ -1,4 +1,5 @@
 import logging
+from unittest import case
 
 from ..client.client_pymem import GameController
 from ..utils.utils_math import get_absolute_scene_id, clamp
@@ -6,6 +7,7 @@ from ..variables.game_notice_id import CONST_NOTICE_ITEM_ID
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_ITEM_UPGRADE_STAT
 from ..variables.location_item_name import CONST_NICKNAME_NAME
 from ..worldgen.items import get_vanilla_level_max, get_vanilla_count_unique, get_vanilla_stat_unique
+from ..worldgen.world_rules.rules_utils import CONST_VANILLA_LOCKED_DAYS
 
 TOTAL_NICKNAME_COUNT = len(CONST_NICKNAME_NAME)
 
@@ -123,6 +125,7 @@ class GameHandler:
 			False, False, False, False, False, False, False, False
 		]
 		self.can_add_notice = False
+		self.options = {}
 
 	def init_game(self):
 		if self.gameController is None: return
@@ -398,7 +401,8 @@ class GameHandler:
 		2. Set that Day's Scene count to the number that the Handler has.
 		"""
 		day_chosen = self.gameController.get_last_day_chosen()
-		self.gameController.set_day_scene_count(day_chosen, self.scenes_unlocked[day_chosen])
+		scene_count = self.retrieve_correct_scene_count(day_chosen + 1)
+		self.gameController.set_day_scene_count(day_chosen, scene_count)
 
 	def check_illogical_nicknames(self):
 		"""
@@ -496,17 +500,54 @@ class GameHandler:
 	#
 	# Generic game status updates
 	#
+	def retrieve_correct_scene_count(self, day_num: int = 1) -> int:
+		day_id: int = day_num - 1
+		final_scene_count: int = 0
+
+		match self.options["progressive_scene"]:
+			case 0:  # Original/Vanilla
+				if day_num not in CONST_VANILLA_LOCKED_DAYS:
+					final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+				else:
+					if self.scenes_unlocked[day_id] < 2:
+						final_scene_count = self.scenes_unlocked[day_id] or 0
+					else:
+						final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+			case 1:  # Vanilla + Day 1
+				if day_num not in CONST_VANILLA_LOCKED_DAYS and (day_id + 1) != 1:
+					final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+				else:
+					if self.scenes_unlocked[day_id] < 2:
+						final_scene_count = self.scenes_unlocked[day_id] or 0
+					else:
+						final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+			case 2:  # First Scene Restriction
+				if self.scenes_unlocked[day_id] < 2:
+					final_scene_count = self.scenes_unlocked[day_id] or 0
+				else:
+					final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+			case 3:  # Gradual Scene Unlock
+				final_scene_count = self.scenes_unlocked[day_id] or 0
+			case _:  # Instant Scene Unlock
+				if self.scenes_unlocked[day_id] > 0:
+					final_scene_count = CONST_DAY_SCENE_COUNT[day_id]
+				else:
+					final_scene_count = 0
+
+		return final_scene_count
+
 	def update_day_and_scenes(self):
 		# Clamp day unlock count.
 		self.days_unlocked = clamp(self.days_unlocked, 0, 9)
 		self.gameController.set_days_unlocked(self.days_unlocked)
+
 		# Clamp scenes count.
 		for day_id in range(10):
 			self.scenes_unlocked[day_id] = clamp(self.scenes_unlocked[day_id], 0, CONST_DAY_SCENE_COUNT[day_id])
-			self.gameController.set_day_scene_count(
-				day_id=day_id,
-				scene_count=self.scenes_unlocked[day_id] or 0
-			)
+			final_scene_count = self.retrieve_correct_scene_count(day_id + 1)
+
+			print(f"Day {str(day_id + 1)} Scene Count: {str(final_scene_count)}")
+			self.gameController.set_day_scene_count(day_id, final_scene_count)
 		return
 
 	def update_cheat_items(self, is_level_based: bool = True):
