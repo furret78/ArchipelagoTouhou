@@ -5,7 +5,7 @@ from ..client.client_pymem import GameController
 from ..utils.utils_math import get_absolute_scene_id, clamp
 from ..variables.game_notice_id import CONST_NOTICE_ITEM_ID
 from ..variables.game_stat_info import CONST_DAY_SCENE_COUNT, CONST_ITEM_UPGRADE_STAT
-from ..variables.location_item_name import CONST_NICKNAME_NAME
+from ..variables.location_item_name import CONST_NICKNAME_NAME, CONST_ITEM_SHORT_TO_ID
 from ..worldgen.items import get_vanilla_level_max, get_vanilla_count_unique, get_vanilla_stat_unique
 from ..worldgen.world_rules.rules_utils import CONST_VANILLA_LOCKED_DAYS
 
@@ -184,6 +184,9 @@ class GameHandler:
 		old_value = self.gameController.get_playtime()
 		self.gameController.set_playtime(old_value + playtime_converted)
 
+	def get_death_count(self):
+		return self.gameController.get_death_count()
+
 	def add_death_count(self, death_count: int):
 		old_value = self.gameController.get_death_count()
 		self.gameController.set_death_count(old_value + death_count)
@@ -233,7 +236,8 @@ class GameHandler:
 			self.gameController.write_notice_into_game(self.notice_queue[notice_index], notice_index)
 
 		if total_notice_count < notice_queue_length:
-			self.notice_queue = self.notice_queue[total_notice_count:]
+			total_notice_to_index = clamp(total_notice_count - 1, 0, 9)
+			self.notice_queue = self.notice_queue[total_notice_to_index:]
 		else: self.notice_queue.clear()
 
 		self.gameController.write_notice_queue_count(total_notice_count)
@@ -384,14 +388,10 @@ class GameHandler:
 		day_chosen = self.gameController.get_last_day_chosen()
 		scene_chosen = self.gameController.get_last_scene_chosen() + 1
 
-		print(f"Last scene chosen {str(day_chosen + 1)}-{str(scene_chosen)}. Max scenes: {self.scenes_unlocked[day_chosen]}")
-
 		self.gameController.set_day_scene_count(day_chosen, CONST_DAY_SCENE_COUNT[day_chosen])
 
 		is_last_scene: bool = scene_chosen >= self.scenes_unlocked[day_chosen]
 		self.toggle_next_scene_button(is_last_scene)
-		if is_last_scene:
-			print(f"This is the last Scene of this Day.")
 
 	def leave_stage_max_scene(self):
 		"""
@@ -476,10 +476,18 @@ class GameHandler:
 
 	def set_default_item_data(self):
 		for i in range(9):
+			self.item_stats[i]["capped"] = True
 			# Set all used item data
 			for k in range(3):
-				self.set_item_data(item_id=i, value=0, data_type=k)
-				self.item_stats[i]["capped"] = True
+				# Special case for the Jizo item.
+				final_value: int = 0
+				if i == CONST_ITEM_SHORT_TO_ID["jizo"] and k == 2:
+					final_value = 25
+				elif i == CONST_ITEM_SHORT_TO_ID["mallet"] and k == 2:
+					final_value = 1
+				elif i == CONST_ITEM_SHORT_TO_ID["yinyang"] and k == 2:
+					final_value = 60
+				self.set_item_data(item_id=i, value=final_value, data_type=k)
 			# Set max level
 			self.set_item_data(item_id=i, value=get_vanilla_level_max(i), data_type=-1)
 
@@ -545,8 +553,6 @@ class GameHandler:
 		for day_id in range(10):
 			self.scenes_unlocked[day_id] = clamp(self.scenes_unlocked[day_id], 0, CONST_DAY_SCENE_COUNT[day_id])
 			final_scene_count = self.retrieve_correct_scene_count(day_id + 1)
-
-			print(f"Day {str(day_id + 1)} Scene Count: {str(final_scene_count)}")
 			self.gameController.set_day_scene_count(day_id, final_scene_count)
 		return
 
@@ -584,8 +590,10 @@ class GameHandler:
 				if clean_stat_count > 0:
 					self.gameController.set_item_stat(item_id, CONST_STAT_LIST[clean_stat_count - 1])
 
-				if self.item_stats[item_id]["level"] < 0: self.item_stats[item_id]["level"] = 0
-				self.gameController.set_item_level(item_id, self.item_stats[item_id]["level"])
+				clean_level_num = self.item_stats[item_id]["level"]
+				if clean_level_num < 0 or clean_use_count <= 0 or clean_stat_count <= 0:
+					clean_level_num = 0
+				self.gameController.set_item_level(item_id, clean_level_num)
 		return
 
 	def update_sub_items(self, subitem_list):

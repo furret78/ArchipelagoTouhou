@@ -242,6 +242,8 @@ def create_all_items(world):
 			if int_item_id == world.options.starting_cheat_item:
 				item_separate_amount[item_string_id][0] -= 1
 				item_separate_amount[item_string_id][1] -= 1
+			if item_string_id == "yinyang":
+				item_separate_amount[item_string_id][1] = 0
 		else:
 			item_level_amount[item_string_id] = get_vanilla_level_max(int_item_id)
 			if int_item_id == world.options.starting_cheat_item:
@@ -252,6 +254,8 @@ def create_all_items(world):
 			if world.options.item_upgrade_separate:
 				for item_str in item_separate_amount.keys():
 					item_separate_amount[item_str] = [20, 20]
+					if item_str == "yinyang":
+						item_separate_amount[item_str][1] = 0
 			else:
 				for item_str in item_level_amount.keys():
 					item_level_amount[item_str] = 20

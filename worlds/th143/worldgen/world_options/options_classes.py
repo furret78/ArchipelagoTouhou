@@ -244,25 +244,9 @@ class StartingDay(Choice):
 
 	@classmethod
 	def get_option_name(cls, value: T) -> str:
-		if value == cls.option_day_1:
-			return "Day 1"
-		elif value == cls.option_day_2:
-			return "Day 2"
-		elif value == cls.option_day_3:
-			return "Day 3"
-		elif value == cls.option_day_4:
-			return "Day 4"
-		elif value == cls.option_day_5:
-			return "Day 5"
-		elif value == cls.option_day_6:
-			return "Day 6"
-		elif value == cls.option_day_7:
-			return "Day 7"
-		elif value == cls.option_day_8:
-			return "Day 8"
-		elif value == cls.option_day_9:
-			return "Day 9"
-		elif value == cls.option_day_10:
+		if 0 <= value < 9:
+			return f"Day {str(value + 1)}"
+		elif value == 9:
 			return "Final Day"
 		elif value == cls.option_random_day:
 			return "Randomized Start"

@@ -1043,6 +1043,8 @@ class ContextISC(CommonContext):
 				if not self.can_check_clear_locations and self.handler.is_game_paused():
 					self.can_check_clear_locations = True
 					self.handler.leave_stage_max_scene()
+					self.save_deaths = self.handler.get_death_count()
+					await self.save_new_local_data()
 					self.logger_debug("Game is allowed to check for scene clears.")
 				if self.can_check_clear_locations and not self.handler.is_game_paused():
 					self.handler.enter_stage_max_scene()

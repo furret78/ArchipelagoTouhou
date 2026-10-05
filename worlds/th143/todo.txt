@@ -1,8 +1,10 @@
 - add filler items handling
 - check other types of generation settings as well (different vanilla settings, starting stages, etc.)
 - finish client
+- TODO: treasure hunt
+- TODO: address camera only usable 7 times even with increased use count (possibly hardcoded?)
 - TODO: Patch mallet infinite plus stat exploit
-- TODO: Rebalanced item leveling system
 - TODO: More logic difficulties other than Normal
-- TODO: Add more nuanced item level difficulties
 - TODO: Add brutal Itemless logic
+- TODO: Add more nuanced item level difficulties
+- TODO: Rebalanced item leveling system

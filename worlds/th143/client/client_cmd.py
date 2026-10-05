@@ -73,12 +73,12 @@ class CommandProccessorISC(ClientCommandProcessor):
 			logger.info(f"Scene Skips used: {scene_skip_used}/{scene_skip_count}.")
 			return
 		if scene_skip_used >= scene_skip_count:
-			logger.info(f"Not enough available Scene Skip items. Scene Skips already used: {scene_skip_used}/{scene_skip_count}.")
+			logger.info(f"Not enough available Scene Skip items. Already used: {scene_skip_used}/{scene_skip_count}.")
 			return
 
 		clean_day_id = clamp(int(day_number), 1, 10)
 		clean_scene_id = clamp(int(scene_number), 1, CONST_DAY_SCENE_COUNT[clean_day_id - 1])
-		scene_num_unlocked = self.ctx.handler.scenes_unlocked[clean_day_id - 1]
+		scene_num_unlocked = self.ctx.handler.retrieve_correct_scene_count(clean_day_id)
 
 		if clean_scene_id > scene_num_unlocked:
 			logger.info(f"Scene {str(clean_day_id)}-{str(clean_scene_id)} hasn't been unlocked yet. Cannot be skipped.")
@@ -92,6 +92,13 @@ class CommandProccessorISC(ClientCommandProcessor):
 		asyncio.create_task(self.ctx.write_scene_skip_to_server())
 		asyncio.create_task(self.ctx.save_new_local_data())
 		return
+
+	def _cmd_count_deaths(self):
+		"""
+		Retrieves how many times you've died according to in-game stats.
+		"""
+		if not self.check_cmd_should_run(): return
+		logger.info(f"Total death tally: {self.ctx.handler.get_death_count()}")
 
 	def _cmd_toggle_debug(self):
 		"""
