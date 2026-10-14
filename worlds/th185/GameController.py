@@ -20,23 +20,23 @@ class GameController:
 
         # Gameplay only.
         # Read straight from them as is to get the value.
-        self.addrCurrentStage = self.pm.base_address+ADDR_CURRENT_STAGE_PTR # Check if pointer itself is valid.
-        self.addrGameFunds = self.pm.base_address+ADDR_GAME_FUNDS_PTR
-        self.addrBulletMoney = self.pm.base_address+ADDR_BULLET_MONEY_PTR
-        self.addrLives = self.pm.base_address+ADDR_LIVES_PTR
-        self.addrBlackMarketStatus = self.pm.base_address+ADDR_BLACK_MARKET_PTR
-        self.addrLastBossMet = self.pm.base_address+ADDR_LAST_BOSS_MET
-        self.addrCurrentStageNumber = self.pm.base_address+ADDR_CURRENT_STAGE_NUM
+        self.addrCurrentStage = self.pm.base_address + ADDR_CURRENT_STAGE_PTR # Check if pointer itself is valid.
+        self.addrGameFunds = self.pm.base_address + ADDR_GAME_FUNDS_PTR
+        self.addrBulletMoney = self.pm.base_address + ADDR_BULLET_MONEY_PTR
+        self.addrLives = self.pm.base_address + ADDR_LIVES_PTR
+        self.addrBlackMarketStatus = self.pm.base_address + ADDR_BLACK_MARKET_PTR
+        self.addrLastBossMet = self.pm.base_address + ADDR_LAST_BOSS_MET
+        self.addrCurrentStageNumber = self.pm.base_address + ADDR_CURRENT_STAGE_NUM
 
-        self.addrShotPower = self.pm.base_address+ADDR_SHOT_POWER
-        self.addrShotAttack = self.pm.base_address+ADDR_SHOT_ATTACK
-        self.addrMagicCircleAttack = self.pm.base_address+ADDR_CIRCLE_ATTACK
-        self.addrMagicCircleSize = self.pm.base_address+ADDR_CIRCLE_SIZE
-        self.addrMagicCircleDuration = self.pm.base_address+ADDR_CIRCLE_DURATION
-        self.addrMagicCircleGraze = self.pm.base_address+ADDR_CIRCLE_GRAZE_RANGE
-        self.addrMoveSpeed = self.pm.base_address+ADDR_MOVEMENT_SPEED
+        self.addrShotPower = self.pm.base_address + ADDR_SHOT_POWER
+        self.addrShotAttack = self.pm.base_address + ADDR_SHOT_ATTACK
+        self.addrMagicCircleAttack = self.pm.base_address + ADDR_CIRCLE_ATTACK
+        self.addrMagicCircleSize = self.pm.base_address + ADDR_CIRCLE_SIZE
+        self.addrMagicCircleDuration = self.pm.base_address + ADDR_CIRCLE_DURATION
+        self.addrMagicCircleGraze = self.pm.base_address + ADDR_CIRCLE_GRAZE_RANGE
+        self.addrMoveSpeed = self.pm.base_address + ADDR_MOVEMENT_SPEED
 
-        self.addrStageResetChecksum = self.pm.base_address+ADDR_STAGE_RESET_CHECKSUM
+        self.addrStageResetChecksum = self.pm.base_address + ADDR_STAGE_RESET_CHECKSUM
 
         # Menu and record-keeping.
         # These use pointers.
@@ -58,7 +58,10 @@ class GameController:
         """
         Returns True if in a stage.
         """
-        return self.pm.read_int(self.addrCurrentStage) != 0
+        try:
+            return self.pm.read_int(self.addrCurrentStage) != 0
+        except:
+            return False
 
     def check_if_in_game(self):
         """

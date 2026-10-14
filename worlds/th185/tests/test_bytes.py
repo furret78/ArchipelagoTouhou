@@ -4,11 +4,11 @@ import pymem
 
 from ..Tools import getPointerAddress, get_internal_boss_id_to_client
 from ..variables.address_card_dex import ADDR_DEX_NO_CARD
-from ..variables.address_code import LIST_ADDR_LIVES_CAP, ADDR_KOISHI_CARD_BUG
+from ..variables.address_code import LIST_ADDR_LIVES_CAP, ADDR_KOISHI_CARD_BUG, ADDR_ANTICHEAT_HACK
 from ..variables.address_gameplay import ADDR_LAST_BOSS_MET, ADDR_CURRENT_STAGE_PTR, ADDR_SHOT_ATTACK
-from ..variables.card_const import ADDR_CARD_TO_DEX, MALLET_CARD
+from ..variables.card_const import ADDR_CARD_TO_DEX, MALLET_CARD, SAKI_BIGSHOT_CARD, SAKI_POWER_CARD
 from ..variables.meta_data import DISPLAY_NAME
-from .. import TouhouHBMWorld, FILE_NAME, ADDR_BASE_MENU_PTR
+from .. import TouhouHBMWorld, FILE_NAME, ADDR_BASE_MENU_PTR, ADDR_STAGE_ID_TO_PTR, ADDR_EQUIP_COST
 
 
 class PythonTestFunctions(unittest.TestCase):
@@ -63,6 +63,39 @@ class PythonTestFunctions(unittest.TestCase):
             addrLifeCapNum = self.pm.base_address + addr
             self.pm.write_bytes(addrLifeCapNum, bytes([0x0B]), 1)
 
-    def test_koishi_fix(self):
+    def test_disable_anticheat(self):
         self.pm = pymem.Pymem(process_name=FILE_NAME)
-        self.pm.write_bytes(self.pm.base_address + ADDR_KOISHI_CARD_BUG, bytes([0x90, 0x90, 0x90, 0x90, 0x90]), 5)
+        self.pm.write_bytes(self.pm.base_address + ADDR_ANTICHEAT_HACK, bytes([0x90, 0x90]), 2)
+
+    def test_unlock_stage(self):
+        self.pm = pymem.Pymem(process_name=FILE_NAME)
+        STAGE_NUM = 1
+        IS_UNLOCKED_BOOL = True
+        STAGE_ADDRESS = getPointerAddress(self.pm, self.pm.base_address + ADDR_BASE_MENU_PTR, [ADDR_STAGE_ID_TO_PTR[STAGE_NUM]])
+        self.pm.write_bool(STAGE_ADDRESS, IS_UNLOCKED_BOOL)
+
+    def test_unlock_card(self):
+        self.pm = pymem.Pymem(process_name=FILE_NAME)
+        CARD_STRING_ID = SAKI_POWER_CARD
+        IS_UNLOCKED_BOOL = True
+        CARD_ADDRESS = getPointerAddress(self.pm, self.pm.base_address + ADDR_BASE_MENU_PTR,
+                                          [ADDR_CARD_TO_DEX[CARD_STRING_ID]])
+        self.pm.write_bool(CARD_ADDRESS, IS_UNLOCKED_BOOL)
+
+    def test_set_equip_cost(self):
+        self.pm = pymem.Pymem(process_name=FILE_NAME)
+        EQUIP_COST_AMOUNT = 500
+        EQUIP_COST_ADDRESS = getPointerAddress(self.pm, self.pm.base_address + ADDR_BASE_MENU_PTR,
+                                          [ADDR_EQUIP_COST])
+        self.pm.write_int(EQUIP_COST_ADDRESS, EQUIP_COST_AMOUNT)
+
+    def test_lives_cap(self):
+        self.pm = pymem.Pymem(process_name=FILE_NAME)
+        LIST_ADDR_LIVES_CAP = (
+            0x14d6c,
+            0x14d72,
+            0x14d85,
+            0x14d8e
+        )
+        for offset in LIST_ADDR_LIVES_CAP:
+            self.pm.write_bytes(self.pm.base_address + offset, bytes([0x07]), 1)

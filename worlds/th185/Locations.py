@@ -31,7 +31,6 @@ for stages in STAGE_LIST:
     # Normal stages
     if stages != CHALLENGE_NAME:
         stage_boss_group: set[str] = set()
-
         # This goes through the boss list of a given market.
         for boss in ALL_BOSSES_LIST[stage_id]:
             stage_boss_string_encounter: str = get_boss_location_name_str(stage_id, boss)
@@ -52,9 +51,9 @@ for stages in STAGE_LIST:
     # Challenge Market
     else:
         challenge_boss_group: set[str] = set()
-        for boss in get_boss_names_challenge_list():
-            challenge_boss_encounter: str = get_boss_location_name_str(STAGE_CHALLENGE_ID, boss)
-            challenge_boss_defeat: str = get_boss_location_name_str(STAGE_CHALLENGE_ID, boss, True)
+        for challenge_boss_name in get_boss_names_challenge_list():
+            challenge_boss_encounter: str = get_boss_location_name_str(STAGE_CHALLENGE_ID, challenge_boss_name)
+            challenge_boss_defeat: str = get_boss_location_name_str(STAGE_CHALLENGE_ID, challenge_boss_name, True)
 
             location_table[challenge_boss_encounter] = location_id_offset
             location_id_to_name[location_id_offset] = challenge_boss_encounter
@@ -73,7 +72,12 @@ for stages in STAGE_LIST:
     location_id_to_name[location_id_offset] = stage_clear_string
     location_id_offset += 1
 
-    location_groups.update({CHALLENGE_NAME_FULL: set(stage_clear_string)})
+    stage_clear_set: set[str] = set()
+    stage_clear_set.add(stage_clear_string)
+    if stages == CHALLENGE_NAME:
+        location_groups[CHALLENGE_NAME_FULL].update(stage_clear_set)
+    else:
+        location_groups[STAGE_SHORT_TO_FULL_NAME[stages]].update(stage_clear_set)
 
 # Card Shop locations at the end of each Market.
 # Location name groups.
@@ -153,8 +157,9 @@ for card_string in ABILITY_CARD_LIST:
     # Challenge Market (unconditional)
     card_groups_list[8].add(cardLocationNameString)
 
-for stage_short_name in STAGE_LIST:
-    location_groups[STAGE_SHORT_TO_FULL_NAME[stage_short_name]].update(card_groups_list[STAGE_LIST.index(stage_short_name)])
+for stage_id_from_list in STAGE_ID_LIST:
+    full_name_of_stage = STAGE_SHORT_TO_FULL_NAME[STAGE_ID_TO_SHORT_NAME[stage_id_from_list]]
+    location_groups[full_name_of_stage].update(card_groups_list[stage_id_from_list])
 
 # Card Dex locations.
 # In location name group terms, these are "Everywhere". No need to do anything about them.

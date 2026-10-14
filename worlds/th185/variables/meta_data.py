@@ -53,3 +53,6 @@ CURRENCY_NAME_FUNDS = "Funds"
 CURRENCY_NAME_BULLET_MONEY = "Bullet Money"
 INVALID_CURRENCY_STRING = "Invalid currency type!"
 BULLET_MONEY_CANNOT_WITHDRAW = "Cannot withdraw Bullet Money. Enter a stage first."
+
+# Generation
+GEN_UNWINNABLE = "This is guaranteed to generate an unwinnable game. (Go back and adjust your .yaml. Try adding more locations or something.)"

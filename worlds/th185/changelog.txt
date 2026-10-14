@@ -1,0 +1,3 @@
+- fixed location groups missing certain locations and containing erroneous entries
+- separate upgrade for equip cost minimum is now 5
+- fixed saki's card fucking up the lives counter

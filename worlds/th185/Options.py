@@ -147,7 +147,7 @@ class ProgressiveCostCount(Range):
     This will determine how many equip cost upgrades will be in the item pool.
     Equip cost maxes out at +900%, and each upgrade is worth 50%.
     """
-    range_start = 0
+    range_start = 5
     range_end = 18
     default = 6
 

@@ -54,6 +54,15 @@ class TouhouHBMWorld(World):
     location_name_groups = Locations.location_groups
 
     def generate_early(self) -> None:
+        # Check if the input looks too ridiculous.
+        # Starting at Challenge Market without Progressive Market but has Disable Challenge Market on.
+        # As well as lacking any other free checks.
+        if not self.options.progressive_stages and self.options.starting_market.value == 8 and not self.options.music_room_checks:
+            if self.options.disable_challenge_logic:
+                raise Exception(f"You chose to start on Challenge Market without Progressive Market enabled and without disabling early Challenge Market. {GEN_UNWINNABLE}")
+            if self.options.low_skill_logic.value != 0:
+                raise Exception(f"You chose to start on Challenge Market without any Ability Cards that generation rules require. {GEN_UNWINNABLE}")
+
         # Set early game placements priority here.
         if self.options.anti_grinding_toggle and self.options.anti_grinding_placements.value:
             for card_item_name in self.options.anti_grinding_placements.value:

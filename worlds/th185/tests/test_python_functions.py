@@ -1,8 +1,8 @@
 import unittest
-import ctypes
-from pymem.ressources.structure import LPSECURITY_ATTRIBUTES
 
-from .. import DISPLAY_NAME, TouhouHBMWorld
+from .. import DISPLAY_NAME, TouhouHBMWorld, STAGE_CHALLENGE_ID
+from ..Tools import get_boss_names_challenge_list, get_boss_location_name_str, get_stage_clear_location_name_str
+
 
 class PythonTestFunctions(unittest.TestCase):
     game = DISPLAY_NAME
@@ -10,8 +10,6 @@ class PythonTestFunctions(unittest.TestCase):
 
     def __init__(self, methodName: str = "runTest"):
         super().__init__(methodName)
-        self.thread_context = winapi_context.CONTEXT64()
-        self.NULL_SECURITY_ATTRIBUTES = ctypes.cast(0, LPSECURITY_ATTRIBUTES)
 
     def test_slice(self):
         list = ["REIMU", "MARISA", "SAKUYA", "SANAE"]
@@ -23,3 +21,6 @@ class PythonTestFunctions(unittest.TestCase):
         # list[list.index("MARISA"):] includes ["MARISA"] + the above.
         # list[-list.index("MARISA"):] removes ["SAKUYA"] from the above.
         # list[-list.index("MARISA"):] removes ["SAKUYA"] from the above.
+
+    def test_challenge_names(self):
+        print(get_stage_clear_location_name_str(STAGE_CHALLENGE_ID))

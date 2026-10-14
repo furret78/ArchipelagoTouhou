@@ -11,7 +11,7 @@ LIST_ADDR_LIVES_CAP = (
     0x0a35b,
     0x0a36e,
     0x0a377,
-    # Function 2 - Probably Mokou's card thing?
+    # Function 2 - Mokou's card
     0x0a43e,
     0x0a444,
     0x0a44b,
@@ -31,9 +31,9 @@ LIST_ADDR_LIVES_CAP = (
     0x12e52,
     0x12e65,
     0x12e6e,
-    # Function 5
+    # Function 5 - Saki's Power card
     0x14d6c,
-    0x14d73,
+    0x14d72,
     0x14d85,
     0x14d8e
 )
