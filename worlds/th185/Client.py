@@ -965,9 +965,9 @@ class TouhouHBMContext(CommonContext):
         This also checks for Victory Condition specifically for the Treasure Hunt mode.
         """
         if self.options["completion_type"] != 7: return
-        if self.debug_alerts:
-            logger.info(f"DEBUG - Dragon Gem Hunt: {treasure_count} / {self.options["dragon_gems_condition"]}.")
+        self.log_debug(f"DEBUG - Dragon Gem Hunt: {treasure_count} / {self.options["dragon_gems_condition"]}.")
         if treasure_count >= self.options["dragon_gems_condition"] and not self.finished_game:
+            if self.inError: return
             self.finished_game = True
             await self.send_msgs([{"cmd": 'StatusUpdate', "status": 30}])
 
@@ -1225,12 +1225,12 @@ class TouhouHBMContext(CommonContext):
         if len(list_msg_to_send) <= 0: return
         await self.send_msgs(list_msg_to_send)
 
-        if self.debug_alerts:
-            if not self.energylink_enabled:
-                logger.info(f"SAVE - Attempted to save {self.menuFunds} Fund(s) to server.")
-            else: logger.info(f"SAVE - Did not save Fund(s) to server due to Energy Link being active.")
-            if self.is_progressive_equip_disabled():
-                logger.info(f"SAVE - Attempted to save {self.loadout_slots} Loadout Slot(s) and {self.equip_cost}% Equip Cost to server.")
+        if not self.energylink_enabled:
+            self.log_debug(f"SAVE - Attempted to save {self.menuFunds} Fund(s) to server.")
+        else:
+            self.log_debug(f"SAVE - Did not save Fund(s) to server due to Energy Link being active.")
+        if self.is_progressive_equip_disabled():
+            self.log_debug(f"SAVE - Attempted to save {self.loadout_slots} Loadout Slot(s) and {self.equip_cost}% Equip Cost to server.")
 
     async def save_menu_funds_to_server(self):
         if self.energylink_enabled:
@@ -1549,6 +1549,7 @@ class TouhouHBMContext(CommonContext):
             await self.send_msgs([{"cmd": 'LocationChecks', "locations": new_locations}])
 
         if self.check_victory_conditions() and not self.finished_game:
+            if self.inError: return
             self.finished_game = True
             await self.send_msgs([{"cmd": 'StatusUpdate', "status": 30}])
 
@@ -1573,23 +1574,22 @@ class TouhouHBMContext(CommonContext):
 
         await self.lock_all_location_data()
 
-        if self.debug_alerts: logger.info(f"LOADING - Cleared dirty game state. Attempting to load previous play data...")
+        self.log_debug(f"LOADING - Finished clearing dirty game state. Attempting to load previous play data...")
 
         try:
-            if self.debug_alerts: logger.info(f"(1/4) Loading music room and achievement records.")
+            self.log_debug("(1/4) Loading music room and achievement records.")
             self.load_sava_data_records()
-            if self.debug_alerts: logger.info(f"(2/4) Loading boss records.")
+            self.log_debug("(2/4) Loading boss records.")
             self.load_save_data_bosses()
-            if self.debug_alerts: logger.info(f"(3/4) Loading card dex entries.")
+            self.log_debug("(3/4) Loading card dex entries.")
             self.load_save_data_dex()
-            if self.debug_alerts: logger.info(f"(4/4) Loading other menu data.")
+            self.log_debug("(4/4) Loading other menu data.")
             self.load_save_data_menu()
 
             self.save_data_loaded_complete = True
         except Exception as e:
-            if self.debug_alerts:
-                logger.info(f"LOADING - Error occurred during the process.")
-                logger.info(traceback.format_exc())
+            self.log_debug("LOADING - Error occurred during the process.")
+            self.log_debug(traceback.format_exc())
 
     def load_save_data_bosses(self):
         challenge_boss_list = get_boss_names_challenge_list()
@@ -1601,20 +1601,19 @@ class TouhouHBMContext(CommonContext):
             if check_if_only_stage_locations():
                 if GENERIC_STAGE_CLEAR_NAME in full_location_name:
                     for boss_name in challenge_boss_list:
-                        if self.debug_alerts: logger.info(f"LOADING - [Boss Records] Autoclearing stage: Challenge Market.")
+                        self.log_debug("LOADING - [Boss Records] Autoclearing stage: Challenge Market.")
                         self.handler.autoClearBossRecord(STAGE_CHALLENGE_ID, BOSS_NAME_TO_ID[boss_name])
             else:
                 for boss_name in challenge_boss_list:
                     if boss_name not in full_location_name: continue
-                    if self.debug_alerts: logger.info(f"LOADING - [Boss Records] Encountered {boss_name} in Challenge Market.")
+                    self.log_debug(f"LOADING - [Boss Records] Encountered {boss_name} in Challenge Market.")
                     self.handler.setBossRecordHandler(STAGE_CHALLENGE_ID, BOSS_NAME_TO_ID[boss_name], True,
                                                       BossDataType.Encounter)
                     self.handler.setBossRecordGame(STAGE_CHALLENGE_ID, BOSS_NAME_TO_ID[boss_name], True,
                                                    BossDataType.Encounter)
 
                     if boss_name not in ALL_BOSSES_LIST[STAGE6_ID]: continue
-                    if self.debug_alerts:
-                        logger.info(f"LOADING - [Boss Records] Defeated {boss_name} in Challenge Market.")
+                    self.log_debug(f"LOADING - [Boss Records] Defeated {boss_name} in Challenge Market.")
                     self.handler.setBossRecordHandler(STAGE_CHALLENGE_ID, BOSS_NAME_TO_ID[boss_name], True,
                                                       BossDataType.Defeat)
                     self.handler.setBossRecordGame(STAGE_CHALLENGE_ID, BOSS_NAME_TO_ID[boss_name], True,
@@ -1624,14 +1623,13 @@ class TouhouHBMContext(CommonContext):
             for stage_boss_name in ALL_BOSSES_LIST[STAGE_NAME_TO_ID[stage_name]]:
                 if check_if_only_stage_locations() and stage_boss_name != BOSS_NITORI_NAME and stage_boss_name != BOSS_TAKANE_NAME:
                     if GENERIC_STAGE_CLEAR_NAME not in full_location_name: continue
-                    if self.debug_alerts:
-                        logger.info(f"LOADING - [Boss Records] Autoclearing stage: {stage_name}")
+                    self.log_debug(f"LOADING - [Boss Records] Autoclearing stage: {stage_name}")
                     self.handler.autoClearBossRecord(STAGE_NAME_TO_ID[stage_name], BOSS_NAME_TO_ID[stage_boss_name])
                 else:
                     if stage_boss_name not in full_location_name: continue
                     record_type = BossDataType.Encounter
                     if DEFEAT_TYPE_NAME in full_location_name: record_type = BossDataType.Defeat
-                    if self.debug_alerts: logger.info(f"LOADING - [Boss Records] Recorded {record_type} for {stage_boss_name} in {stage_boss_name}.")
+                    self.log_debug(f"LOADING - [Boss Records] Recorded {record_type} for {stage_boss_name} in {stage_boss_name}.")
                     self.handler.setBossRecordHandler(STAGE_NAME_TO_ID[stage_name], BOSS_NAME_TO_ID[stage_boss_name],
                                                       True, record_type)
                     self.handler.setBossRecordGame(STAGE_NAME_TO_ID[stage_name], BOSS_NAME_TO_ID[stage_boss_name], True,
@@ -1655,7 +1653,7 @@ class TouhouHBMContext(CommonContext):
         for location_id in self.previous_location_checked:
             full_location_name = location_id_to_name[location_id]
             # Iterate through all shortened stage names.
-            if self.debug_alerts: logger.info(f"DATA - Processing location {location_id}: {full_location_name}")
+            self.log_debug(f"DATA - Processing location {location_id}: {full_location_name}")
             process_next_location(full_location_name)
 
     def load_save_data_dex(self):
@@ -1682,11 +1680,10 @@ class TouhouHBMContext(CommonContext):
 
         self.menu_stats_initialized = True
 
-        if self.debug_alerts:
-            if not self.energylink_enabled:
-                logger.info(f"Loaded {self.menuFunds} Fund(s).")
-            if self.is_progressive_equip_disabled():
-                logger.info(f"Loaded {self.loadout_slots} Loadout Slot(s) and {self.equip_cost}% Equip Cost.")
+        if not self.energylink_enabled:
+            self.log_debug(f"Loaded {self.menuFunds} Fund(s).")
+        if self.is_progressive_equip_disabled():
+            self.log_debug(f"Loaded {self.loadout_slots} Loadout Slot(s) and {self.equip_cost}% Equip Cost.")
 
     def load_sava_data_records(self):
         # Assume that the game is in 100% locked mode.
@@ -1713,8 +1710,7 @@ class TouhouHBMContext(CommonContext):
         starting_stats_set_obj = self.starting_stats.items()
 
         # Otherwise, process as usual.
-        if self.debug_alerts:
-            logger.info(f"Starting stage with the following upgrades:")
+        self.log_debug(f"Starting stage with the following upgrades:")
 
         for key, value in starting_stats_set_obj:
             match key:
@@ -1723,7 +1719,7 @@ class TouhouHBMContext(CommonContext):
                 case "shot_power": self.handler.gameController.addShotPower(value)
                 case "shot_attack": self.handler.gameController.addShotAttack(value * 5)
                 case "circle_atk": self.handler.gameController.addMagicCircleAttack(value * 5)
-            if self.debug_alerts: logger.info(f"- {value} {key}")
+            self.log_debug(f"- {value} {key}")
         return
 
     # Helper functions for things to do with the menu.
@@ -1757,8 +1753,7 @@ class TouhouHBMContext(CommonContext):
 
         self.handler.setCardSlots(1 + received_slot_count)
 
-        if self.debug_alerts:
-            logger.info(f"Loaded {1 + received_slot_count} Loadout Slot(s).")
+        self.log_debug(f"Loaded {1 + received_slot_count} Loadout Slot(s).")
 
     async def transfer_from_menu_to_stage(self):
         """
@@ -2228,8 +2223,7 @@ class TouhouHBMContext(CommonContext):
                 # If the Stage Reset function returns True, the stage has been reset.
                 self.stage_started_properly = not self.handler.checkForStageReset()
                 if not self.stage_started_properly:
-                    if self.debug_alerts:
-                        logger.info("Stage was restarted.")
+                    self.log_debug("Stage was restarted.")
                     self.set_starting_stage_stats()
                     self.handler.writeStageReset()
                     self.halt_game_logic = True
@@ -2367,11 +2361,10 @@ class TouhouHBMContext(CommonContext):
                         self.set_trap_old_value("shot_atk", self.handler.gameController.getShotAttack())
                     self.handler.setPowerlessTrap()
 
-            if self.debug_alerts:
-                if is_first_time:
-                    logger.info(f"Trap {trap_key_name} has been activated. Old stats at the time of activation have been saved.")
-                else:
-                    logger.info(f"Trap {trap_key_name} has been extended ({self.received_traps[trap_key_name]} instances remaining).")
+            if is_first_time:
+                self.log_debug(f"Trap {trap_key_name} has been activated. Old stats at the time of activation have been saved.")
+            else:
+                self.log_debug(f"Trap {trap_key_name} has been extended ({self.received_traps[trap_key_name]} instances remaining).")
 
         def remove_trap(trap_name):
             trap_active_dict[trap_name] = False
@@ -2392,8 +2385,7 @@ class TouhouHBMContext(CommonContext):
                 case "powerless":
                     self.handler.removePowerlessTrap(self.trap_old_values["shot_atk"])
                     self.trap_old_values["shot_atk"] = -1
-            if self.debug_alerts:
-                logger.info(f"Trap {trap_name} has expired, and appropriate player stats have been restored.")
+            self.log_debug(f"Trap {trap_name} has expired, and appropriate player stats have been restored.")
 
         if self.options["trap_chance"] <= 0: return
         try:
@@ -2417,8 +2409,7 @@ class TouhouHBMContext(CommonContext):
                     for key_name in trap_timer_dict.keys():
                         trap_timer_dict[key_name] = 0
                     self.reset_trap_old_values()
-                    if self.debug_alerts:
-                        logger.info(f"All Traps have been reset.")
+                    self.log_debug("All Traps have been reset.")
                     continue
 
                 # Handle the actual traps here.
@@ -2460,13 +2451,13 @@ class TouhouHBMContext(CommonContext):
         if value_name == "magic":
             if self.trap_old_values[value_name] is None:
                 self.trap_old_values[value_name] = value
-            elif self.debug_alerts:
-                logger.info(f"Old values field for Magic Circle trap has already been filled! Set to None before using this.")
+            else:
+                self.log_debug("Old values field for Magic Circle trap has already been filled! Set to None before using this.")
             return
         elif self.trap_old_values[value_name] < 0:
             self.trap_old_values[value_name] = value
-        elif self.debug_alerts:
-            logger.info(f"Old values field for Trap {value_name} has already been filled! Set to -1 before using this.")
+        else:
+            self.log_debug(f"Old values field for Trap {value_name} has already been filled! Set to -1 before using this.")
 
     def reset_trap_old_values(self):
         """
@@ -2484,8 +2475,7 @@ class TouhouHBMContext(CommonContext):
             if new_time_value < 2: new_time_value = 2
             self.trap_duration_limit[time_name] = new_time_value
 
-            if self.debug_alerts:
-                logger.info(f"Trap {time_name} duration has been set to {new_time_value} seconds.")
+            self.log_debug(f"Trap {time_name} duration has been set to {new_time_value} seconds.")
 
     async def deathlink_loop(self):
         # If going back to the menu, the first transition will turn off
@@ -2523,8 +2513,7 @@ class TouhouHBMContext(CommonContext):
                 if self.pending_received_deathlink and not self.died_to_deathlink:
                     # If Anti-Death Link Invincibility is enabled, check against invincibility.
                     if self.death_link_check_invincibility():
-                        if self.debug_alerts:
-                            logger.info(f"DEATHLINK - Killing player.")
+                        self.log_debug("DEATHLINK - Killing player.")
                         self.handler.killPlayer()
                     self.died_to_deathlink = True
                     self.pending_received_deathlink = False
@@ -2548,6 +2537,13 @@ class TouhouHBMContext(CommonContext):
         except Exception as e:
             self.inError = True
             self.deathlink_loop_traceback = "Error in the DEATH LINK loop." + "\n" + traceback.format_exc()
+
+    def log_debug(self, debug_msg: str, is_error: bool = False):
+        if not self.debug_alerts: return
+        if is_error:
+            logger.error(debug_msg)
+        else:
+            logger.info(debug_msg)
 
 
 def check_traceback_full(ctx) -> bool:
@@ -2596,8 +2592,7 @@ async def game_watcher(ctx: TouhouHBMContext):
         else:
             if not ctx.retrievedCustomData:
                 try:
-                    if ctx.debug_alerts:
-                        logger.info(f"LOADING - Retrieving custom data from server.")
+                    ctx.log_debug("LOADING - Retrieving custom data from server.")
                     await ctx.get_custom_data_from_server()
                 except Exception as e:
                     ctx.inError = True
@@ -2646,24 +2641,21 @@ async def game_watcher(ctx: TouhouHBMContext):
 
             if ctx.loadingDataSetup:
                 logger.info(f"Found {SHORT_NAME} process!")
-                if ctx.debug_alerts:
-                    logger.info(f"LOADING - Now loading data...")
+                ctx.log_debug("LOADING - Now loading game data and patching game...")
 
                 ctx.set_default_trap_times()
 
                 if ctx.options["death_link"]:
                     await ctx.update_death_link(True)
                     ctx.deathlink_enabled = True
-                    if ctx.debug_alerts:
-                        logger.info(f"GAME INFO - Death Link is enabled for this game.")
+                    ctx.log_debug("GAME INFO - Death Link is enabled for this game.")
 
                 if ctx.options["death_link_trigger"]:
                     ctx.deathlink_trigger = ctx.options["death_link_trigger"]
 
                 if ctx.options["energy_link"]:
                     ctx.energylink_enabled = True
-                    if ctx.debug_alerts:
-                        logger.info(f"GAME INFO - Energy Link is enabled for this game.")
+                    ctx.log_debug("GAME INFO - Energy Link is enabled for this game.")
                     if ctx.ui:
                         ctx.ui.enable_energy_link()
 
@@ -2673,11 +2665,17 @@ async def game_watcher(ctx: TouhouHBMContext):
                 if not ctx.is_progressive_equip_disabled():
                     ctx.handler.initGameProgressSlots()
 
-                asyncio.create_task(ctx.load_save_data())
-                if ctx.debug_alerts:
-                    logger.info(f"LOADING - Finished loading process.")
+                try:
+                    await ctx.load_save_data()
+                except:
+                    ctx.inError = True
+                    logger.error("LOADING - Save data loading process failed.")
+                    continue
+                ctx.log_debug("LOADING - Finished loading process.")
                 ctx.loadingDataSetup = False
                 continue
+
+            if ctx.inError: continue
 
             # Start the different loops.
             loops = []

@@ -265,7 +265,10 @@ class GameController:
     # Stage functions
     def getStageStatus(self, stage_id: int) -> bool:
         stageLockAddress = self.getAddressFromPointerWithBase(ADDR_STAGE_ID_TO_PTR[stage_id])
-        return bool.from_bytes(self.pm.read_bytes(stageLockAddress, 1))
+        try:
+            return self.pm.read_bool(stageLockAddress)
+        except:
+            return False
 
     def setStageStatus(self, stage_id: int, value: int):
         stageLockAddress = self.getAddressFromPointerWithBase(ADDR_STAGE_ID_TO_PTR[stage_id])
